@@ -5,16 +5,15 @@ Pydantic models for FSA representation, answer specification,
 evaluation parameters, and result feedback.
 """
 
-from .fsa import FSA, Transition, StatePosition
+from .fsa import FSA, Transition
 from .answer import Answer, TestCase
 from .params import Params
-from .result import Result, ValidationError, FSAFeedback
+from .result import Result, ValidationError, ElementHighlight, FSAFeedback
 
 __all__ = [
     # FSA representation
     "FSA",
     "Transition",
-    "StatePosition",
     # Answer
     "Answer",
     "TestCase",
@@ -23,5 +22,6 @@ __all__ = [
     # Result
     "Result",
     "ValidationError",
+    "ElementHighlight",
     "FSAFeedback",
 ]
