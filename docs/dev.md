@@ -190,7 +190,22 @@ Errors include a `highlight` field that tells the frontend exactly which FSA ele
 | `accept_state` | `state_id` | Highlight the accept state indicator |
 | `alphabet_symbol` | `symbol` | Highlight a symbol in the alphabet |
 
-## Error Codes
+## Error Codes (Enum)
+
+Error codes are defined as a type-safe enum (`ErrorCode`) in `evaluation_function/schemas/result.py`.
+
+```python
+from evaluation_function.schemas import ErrorCode, ValidationError
+
+# Type-safe error creation
+error = ValidationError(
+    message="State 'q5' does not exist",
+    code=ErrorCode.INVALID_STATE,  # Enum value
+    severity="error"
+)
+```
+
+### Available Error Codes
 
 | Code | Highlight Type | Description |
 |------|----------------|-------------|
@@ -205,6 +220,14 @@ Errors include a `highlight` field that tells the frontend exactly which FSA ele
 | `DUPLICATE_TRANSITION` | transition | Non-deterministic transition |
 | `UNREACHABLE_STATE` | state | State not reachable from initial |
 | `DEAD_STATE` | state | State cannot reach accept state |
+| `WRONG_AUTOMATON_TYPE` | general | Wrong automaton type (NFA when DFA expected) |
+| `NOT_DETERMINISTIC` | general | Has non-deterministic transitions |
+| `NOT_COMPLETE` | general | DFA missing some transitions |
+| `LANGUAGE_MISMATCH` | general | Accepts wrong language |
+| `TEST_CASE_FAILED` | general | Failed specific test case |
+| `EMPTY_STATES` | general | No states defined |
+| `EMPTY_ALPHABET` | general | No alphabet symbols |
+| `EVALUATION_ERROR` | general | Internal evaluation error |
 
 ## Examples
 

@@ -237,7 +237,19 @@ The `highlight` field in `ValidationError` tells the frontend which FSA element 
 ```
 **Frontend action:** Highlight alphabet symbol "a" in the alphabet list/panel.
 
-## Error Codes
+## Error Codes (`ErrorCode` Enum)
+
+Error codes are defined as a **type-safe enum** in `result.py`:
+
+```python
+from evaluation_function.schemas import ErrorCode
+
+# Use enum values for type safety
+error_code = ErrorCode.INVALID_STATE  # ✅ Type-safe
+error_code = "INVALID_STATE"          # ❌ No type checking
+```
+
+### Available Error Codes
 
 | Code | Element Type | Description |
 |------|--------------|-------------|
@@ -252,13 +264,27 @@ The `highlight` field in `ValidationError` tells the frontend which FSA element 
 | `DUPLICATE_TRANSITION` | transition | Multiple transitions for (state, symbol) |
 | `UNREACHABLE_STATE` | state | State not reachable from initial |
 | `DEAD_STATE` | state | State cannot reach accept state |
-| `WRONG_TYPE` | general | Wrong automaton type (NFA vs DFA) |
-| `LANGUAGE_MISMATCH` | general | Accepts wrong language |
+| `WRONG_AUTOMATON_TYPE` | general | Wrong automaton type (e.g., NFA when DFA expected) |
+| `NOT_DETERMINISTIC` | general | FSA has non-deterministic transitions |
+| `NOT_COMPLETE` | general | DFA missing some transitions |
+| `LANGUAGE_MISMATCH` | general | FSA accepts wrong language |
+| `TEST_CASE_FAILED` | general | Failed specific test case |
+| `EMPTY_STATES` | general | No states defined |
+| `EMPTY_ALPHABET` | general | No alphabet symbols defined |
+| `EVALUATION_ERROR` | general | Internal evaluation error |
 
 ## Usage in Evaluation Function
 
 ```python
-from evaluation_function.schemas import FSA, Answer, Params, Result, ElementHighlight, ValidationError
+from evaluation_function.schemas import (
+    FSA, 
+    Answer, 
+    Params, 
+    Result, 
+    ElementHighlight, 
+    ValidationError,
+    ErrorCode  # Import the enum
+)
 
 # Parse student response
 fsa = FSA(**response_data)
@@ -267,7 +293,7 @@ fsa = FSA(**response_data)
 if invalid_state:
     error = ValidationError(
         message=f"State '{state}' does not exist",
-        code="INVALID_STATE",
+        code=ErrorCode.INVALID_STATE,  # Use enum value
         severity="error",
         highlight=ElementHighlight(
             type="state",

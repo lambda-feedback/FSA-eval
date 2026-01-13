@@ -4,8 +4,47 @@ Result Schema
 Extended result schema with structured feedback for UI highlighting.
 """
 
-from typing import List, Optional, Literal, Dict, Any
+from typing import List, Optional, Literal
+from enum import Enum
 from pydantic import BaseModel, Field
+
+
+class ErrorCode(str, Enum):
+    """
+    Standardized error codes for FSA validation.
+    
+    These codes allow the frontend to programmatically handle specific error types.
+    """
+    # Structural errors - invalid elements
+    INVALID_STATE = "INVALID_STATE"
+    INVALID_INITIAL = "INVALID_INITIAL"
+    INVALID_ACCEPT = "INVALID_ACCEPT"
+    INVALID_SYMBOL = "INVALID_SYMBOL"
+    
+    # Transition errors
+    INVALID_TRANSITION_SOURCE = "INVALID_TRANSITION_SOURCE"
+    INVALID_TRANSITION_DEST = "INVALID_TRANSITION_DEST"
+    INVALID_TRANSITION_SYMBOL = "INVALID_TRANSITION_SYMBOL"
+    MISSING_TRANSITION = "MISSING_TRANSITION"
+    DUPLICATE_TRANSITION = "DUPLICATE_TRANSITION"
+    
+    # Reachability errors
+    UNREACHABLE_STATE = "UNREACHABLE_STATE"
+    DEAD_STATE = "DEAD_STATE"
+    
+    # Type errors
+    WRONG_AUTOMATON_TYPE = "WRONG_AUTOMATON_TYPE"
+    NOT_DETERMINISTIC = "NOT_DETERMINISTIC"
+    NOT_COMPLETE = "NOT_COMPLETE"
+    
+    # Language errors
+    LANGUAGE_MISMATCH = "LANGUAGE_MISMATCH"
+    TEST_CASE_FAILED = "TEST_CASE_FAILED"
+    
+    # General errors
+    EMPTY_STATES = "EMPTY_STATES"
+    EMPTY_ALPHABET = "EMPTY_ALPHABET"
+    EVALUATION_ERROR = "EVALUATION_ERROR"
 
 
 class ElementHighlight(BaseModel):
@@ -73,9 +112,9 @@ class ValidationError(BaseModel):
     """
     message: str = Field(..., description="Human-readable error message")
     
-    code: str = Field(
+    code: ErrorCode = Field(
         ..., 
-        description="Machine-readable error code (e.g., 'MISSING_TRANSITION', 'INVALID_STATE')"
+        description="Standardized error code from ErrorCode enum"
     )
     
     severity: Literal["error", "warning", "info"] = Field(
