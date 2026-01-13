@@ -1,10 +1,6 @@
 import unittest
 
-from evaluation_function.schemas.validation import (
-    is_valid_fsa,
-    is_deterministic,
-    is_complete,
-)
+from evaluation_function.validation.validation import *
 
 from evaluation_function.schemas.fsa import FSA, Transition
 from .utils import make_fsa
@@ -115,6 +111,52 @@ class TestFSAValidation(unittest.TestCase):
         )
 
         self.assertTrue(is_complete(fsa))
+    
+    def test_accepts_string(self):
+        fsa = make_fsa(
+            states=["q0", "q1"],
+            alphabet=["a"],
+            transitions=[{"from_state": "q0", "to_state": "q1", "symbol": "a"}],
+            initial="q0",
+            accept=["q1"]
+        )
+
+        assert accepts_string(fsa, "a") is True
+        assert accepts_string(fsa, "") is False
+        assert accepts_string(fsa, "aa") is False
+    
+    def test_fsas_accept_same_language(self):
+        fsa1 = make_fsa(
+            states=["q0", "q1"],
+            alphabet=["a"],
+            transitions=[{"from_state": "q0", "to_state": "q1", "symbol": "a"}],
+            initial="q0",
+            accept=["q1"]
+        )
+
+        fsa2 = make_fsa(
+            states=["s0", "s1"],
+            alphabet=["a"],
+            transitions=[{"from_state": "s0", "to_state": "s1", "symbol": "a"}],
+            initial="s0",
+            accept=["s1"]
+        )
+
+        fsa3 = make_fsa(
+            states=["q0", "q1"],
+            alphabet=["a"],
+            transitions=[{"from_state": "q0", "to_state": "q1", "symbol": "a"}],
+            initial="q0",
+            accept=["q0"]  # different accept state
+        )
+
+        # fsa1 and fsa2 are equivalent
+        assert fsas_accept_same_language(fsa1, fsa2, max_length=1) is True
+
+        # fsa1 and fsa3 are not equivalent
+        assert fsas_accept_same_language(fsa1, fsa3, max_length=1) is False
+
+
 
 
 if __name__ == "__main__":
