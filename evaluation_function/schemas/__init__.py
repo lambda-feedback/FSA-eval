@@ -8,7 +8,7 @@ evaluation parameters, and result feedback.
 from .fsa import FSA, Transition
 from .answer import Answer, TestCase
 from .params import Params
-from .result import Result, ValidationError, ElementHighlight, FSAFeedback, ErrorCode
+from .result import Result, ValidationError, ElementHighlight, FSAFeedback, ErrorCode, StructuralInfo
 
 __all__ = [
     # FSA representation
@@ -24,5 +24,6 @@ __all__ = [
     "ValidationError",
     "ElementHighlight",
     "ErrorCode",
+    "StructuralInfo"
     "FSAFeedback",
 ]
