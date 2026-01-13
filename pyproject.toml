@@ -13,6 +13,7 @@ evaluation_function_dev = "evaluation_function.dev:dev"
 [tool.poetry.dependencies]
 python = "^3.9"
 typing_extensions = "^4.12.2"
+pydantic = "^2.0"
 lf_toolkit = { git = "https://github.com/lambda-feedback/toolkit-python.git", branch = "main", extras = [
     "ipc",
 ] }
