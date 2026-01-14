@@ -1,8 +1,7 @@
 import unittest
 
 from evaluation_function.validation.validation import *
-from evaluation_function.schemas.fsa import FSA, Transition
-from .utils import make_fsa
+from evaluation_function.schemas.utils import make_fsa
 
 
 class TestFSAValidation(unittest.TestCase):
