@@ -1,4 +1,3 @@
-from graphviz import Digraph
 from .fsa import FSA, Transition
 
 import matplotlib.pyplot as plt

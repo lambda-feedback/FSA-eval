@@ -1,8 +1,9 @@
 from itertools import product
-from typing import List, Set
+from typing import Dict, List, Set
 from collections import deque
 
 from evaluation_function.schemas.result import StructuralInfo
+from ..algorithms.minimization import hopcroft_minimization
 
 from ..schemas import FSA, ValidationError, ErrorCode, ElementHighlight
 
@@ -369,44 +370,47 @@ def fsas_accept_same_string(fsa1: FSA, fsa2: FSA, string: str) -> List[Validatio
     return []
 
 
-def fsas_accept_same_language(fsa1: FSA, fsa2: FSA, max_length: int = 5) -> List[ValidationError]:
-    """
-    Approximate check for language equivalence by testing all strings up to max_length.
-    Returns [] if equivalent, else a ValidationError.
-    """
-    errors = []
+def fsas_accept_same_language(fsa1: FSA, fsa2: FSA) -> List[ValidationError]:
+    fsa1_min = hopcroft_minimization(fsa1)
+    fsa2_min = hopcroft_minimization(fsa2)
+    return are_isomorphic(fsa1_min, fsa2_min)
+    # """
+    # Approximate check for language equivalence by testing all strings up to max_length.
+    # Returns [] if equivalent, else a ValidationError.
+    # """
+    # errors = []
 
-    if set(fsa1.alphabet) != set(fsa2.alphabet):
-        errors.append(
-            ValidationError(
-                message=f"Alphabets of FSAs differ: FSA1 alphabet = {set(fsa1.alphabet)}, FSA2 alphabet = {set(fsa2.alphabet)}",
-                code=ErrorCode.LANGUAGE_MISMATCH,
-                severity="error"
-            )
-        )
-        return errors
+    # if set(fsa1.alphabet) != set(fsa2.alphabet):
+    #     errors.append(
+    #         ValidationError(
+    #             message=f"Alphabets of FSAs differ: FSA1 alphabet = {set(fsa1.alphabet)}, FSA2 alphabet = {set(fsa2.alphabet)}",
+    #             code=ErrorCode.LANGUAGE_MISMATCH,
+    #             severity="error"
+    #         )
+    #     )
+    #     return errors
 
-    alphabet = fsa1.alphabet
+    # alphabet = fsa1.alphabet
     
-    # Check empty string
-    empty_string_error = fsas_accept_same_string(fsa1, fsa2, "")
-    if empty_string_error:
-        return empty_string_error
+    # # Check empty string
+    # empty_string_error = fsas_accept_same_string(fsa1, fsa2, "")
+    # if empty_string_error:
+    #     return empty_string_error
     
-    for length in range(1, max_length + 1):
-        for s in product(alphabet, repeat=length):
-            string = ''.join(s)
-            err = fsas_accept_same_string(fsa1, fsa2, string)
-            if err:
-                errors.append(
-                    ValidationError(
-                        message=f"FSAs differ on string '{string}' of length {length}",
-                        code=ErrorCode.LANGUAGE_MISMATCH,
-                        severity="error"
-                    )
-                )
-                return errors  # stop at first counterexample
-    return errors
+    # for length in range(1, max_length + 1):
+    #     for s in product(alphabet, repeat=length):
+    #         string = ''.join(s)
+    #         err = fsas_accept_same_string(fsa1, fsa2, string)
+    #         if err:
+    #             errors.append(
+    #                 ValidationError(
+    #                     message=f"FSAs differ on string '{string}' of length {length}",
+    #                     code=ErrorCode.LANGUAGE_MISMATCH,
+    #                     severity="error"
+    #                 )
+    #             )
+    #             return errors  # stop at first counterexample
+    # return errors
 
 
 def get_structured_info_of_fsa(fsa: FSA) -> StructuralInfo:
@@ -446,3 +450,103 @@ def get_structured_info_of_fsa(fsa: FSA) -> StructuralInfo:
         dead_states=dead_states_list,
         unreachable_states=unreachable_states_list
     )
+    
+def are_isomorphic(fsa1: FSA, fsa2: FSA) -> List[ValidationError]:
+    """
+    Checks if two DFAs are isomorphic. 
+    Returns a list of ValidationErrors if they differ, otherwise an empty list.
+    Assumes DFAs are minimized and complete.
+    """
+    errors = []
+    # 1. Alphabet Check (Mandatory)
+    if set(fsa1.alphabet) != set(fsa2.alphabet):
+        errors.append(
+            ValidationError(
+                message="The alphabet of your FSA does not match the required alphabet.",
+                code=ErrorCode.LANGUAGE_MISMATCH,
+                severity="error",
+                suggestion=f"Your alphabet: {set(fsa1.alphabet)}. Expected: {set(fsa2.alphabet)}."
+            )
+        )
+
+    # 2. Basic Structural Check (State Count)
+    if len(fsa1.states) != len(fsa2.states):
+        errors.append(
+            ValidationError(
+                message=f"FSA structure mismatch: expected {len(fsa2.states)} states, but found {len(fsa1.states)}.",
+                code=ErrorCode.LANGUAGE_MISMATCH,
+                severity="error",
+                suggestion="Verify if you have unnecessary states or if you have minimized your FSA."
+            )
+        )
+
+    # 3. State Mapping Initialization
+    mapping: Dict[str, str] = {fsa1.initial_state: fsa2.initial_state}
+    queue = deque([fsa1.initial_state])
+    visited = {fsa1.initial_state}
+
+    # Optimization: Pre-map transitions
+    trans1 = {(t.from_state, t.symbol): t.to_state for t in fsa1.transitions}
+    trans2 = {(t.from_state, t.symbol): t.to_state for t in fsa2.transitions}
+    accept1 = set(fsa1.accept_states)
+    accept2 = set(fsa2.accept_states)
+
+    while queue:
+        s1 = queue.popleft()
+        s2 = mapping[s1]
+
+        # 4. Check Acceptance Parity
+        if (s1 in accept1) != (s2 in accept2):
+            expected_type = "accepting" if s2 in accept2 else "non-accepting"
+            errors.append(
+                ValidationError(
+                    message=f"State '{s1}' is incorrectly marked. It should be an {expected_type} state.",
+                    code=ErrorCode.LANGUAGE_MISMATCH,
+                    severity="error",
+                    highlight=ElementHighlight(type="state", state_id=s1),
+                    suggestion=f"Toggle the 'accept' status of state '{s1}'."
+                )
+            )
+
+        # 5. Check Transitions for every symbol in the shared alphabet
+        for symbol in fsa1.alphabet:
+            dest1 = trans1.get((s1, symbol))
+            dest2 = trans2.get((s2, symbol))
+
+            # Missing Transition Check
+            if (dest1 is None) != (dest2 is None):
+                errors.append(
+                    ValidationError(
+                        message=f"Missing or extra transition from state '{s1}' on symbol '{symbol}'.",
+                        code=ErrorCode.LANGUAGE_MISMATCH,
+                        severity="error",
+                        highlight=ElementHighlight(type="state", state_id=s1, symbol=symbol),
+                        suggestion="Ensure your DFA is complete and follows the transition logic."
+                    )
+                )
+            
+            if dest1 is not None:
+                if dest1 not in mapping:
+                    # New state discovered: check if we've exceeded state count in mapping
+                    mapping[dest1] = dest2
+                    visited.add(dest1)
+                    queue.append(dest1)
+                else:
+                    # Consistency check: does fsa1 transition to the same logical state as fsa2?
+                    if mapping[dest1] != dest2:
+                        errors.append(
+                            ValidationError(
+                                message=f"Transition from '{s1}' on '{symbol}' leads to the wrong state.",
+                                code=ErrorCode.LANGUAGE_MISMATCH,
+                                severity="error",
+                                highlight=ElementHighlight(
+                                    type="transition", 
+                                    from_state=s1, 
+                                    to_state=dest1, 
+                                    symbol=symbol
+                                ),
+                                suggestion="Check if this transition should point to a different state."
+                            )
+                        )
+
+    return errors

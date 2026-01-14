@@ -44,6 +44,11 @@ A Python-based utility module for the structural validation, property analysis, 
 | `accepts_string(fsa, string)` | Tests if the FSA accepts a specific string. Supports non-determinism. |
 | `fsas_accept_same_language(fsa1, fsa2)` | Compares two FSAs for equivalence up to a specific string length. |
 
+### 4. Isomorphism
+| Function | Description |
+| --- | --- |
+| `are_isomorphism(fsa1, fsa2)`| Check if two FSA are isomorphic |
+
 ---
 
 ## 📋 Data Structure Support

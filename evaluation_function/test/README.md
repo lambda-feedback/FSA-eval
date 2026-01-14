@@ -9,8 +9,9 @@ test/
 ├── __init__.py                    # Test package init
 ├── conftest.py                    # Shared fixtures and configuration
 ├── test_epsilon_closure.py        # ε-closure computation tests
-├── test_nfa_to_dfa.py            # NFA→DFA conversion tests
-└── test_minimization.py          # DFA minimization tests
+├── test_nfa_to_dfa.py             # NFA→DFA conversion tests
+├── test_minimization.py           # DFA minimization tests
+└── test_validation.py             # validation tests
 ```
 
 ## Running Tests
@@ -27,6 +28,7 @@ pytest
 pytest evaluation_function/test/test_epsilon_closure.py
 pytest evaluation_function/test/test_nfa_to_dfa.py
 pytest evaluation_function/test/test_minimization.py
+pytest evaluation_function/test/test_validation.py
 ```
 
 ### Run specific test class or function
