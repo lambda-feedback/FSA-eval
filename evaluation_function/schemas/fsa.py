@@ -82,3 +82,21 @@ class FSA(BaseModel):
                 "accept_states": ["q2"]
             }
         }
+
+
+
+test_json: str = """
+{
+  "states": ["q0", "q1", "q2"],
+  "alphabet": ["a", "b"],
+  "transitions": [
+      {"from_state": "q0", "to_state": "q1", "symbol": "a"},
+      {"from_state": "q1", "to_state": "q2", "symbol": "b"}
+  ],
+  "initial_state": "q0",
+  "accept_states": ["q2"]
+}"""
+
+if __name__ == "__main__":
+  fsa = FSA.model_validate_json(test_json)
+  print(fsa)

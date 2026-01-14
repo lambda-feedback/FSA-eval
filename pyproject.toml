@@ -20,6 +20,7 @@ lf_toolkit = { git = "https://github.com/lambda-feedback/toolkit-python.git", br
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2.2"
+pytest-cov = "^5.0.0"
 flake8 = "^7.1.0"
 
 [build-system]
