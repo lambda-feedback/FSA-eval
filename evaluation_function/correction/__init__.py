@@ -5,16 +5,29 @@ Provides diagnostic information for comparing student FSAs against expected lang
 - Generate strings that show differences between student FSA and expected language
 - Identify specific states/transitions causing errors
 
-Main Functions:
-- analyze_fsa_correction: Full pipeline for FSA comparison and error identification
-- get_correction_feedback: Convenience function returning dict results
-- get_fsa_feedback: Returns FSAFeedback schema (recommended for UI integration)
-- check_fsa_properties: Get structural properties of a single FSA
-- quick_equivalence_check: Fast check if two FSAs are equivalent
+Main Entry Point:
+- evaluate_fsa: Full pipeline (Answer + Params -> Result)
+
+Pipeline Functions:
+- analyze_fsa_correction: FSA vs FSA comparison
+- get_correction_feedback: Returns dict result
+- get_fsa_feedback: Returns FSAFeedback schema (for UI)
+- check_fsa_properties: Structural properties of single FSA
+- quick_equivalence_check: Fast equivalence check
+
+Supports All Answer Types:
+- TestCasesAnswer: Test FSA on specific strings
+- ReferenceFSAAnswer: Compare languages via minimization + isomorphism
+- RegexAnswer: Convert regex to FSA (TODO)
+- GrammarAnswer: Convert grammar to FSA (TODO)
 """
 
 from .correction import (
-    # Main pipeline functions
+    # Main evaluation pipeline (Answer + Params -> Result)
+    evaluate_fsa,
+    evaluate_against_test_cases,
+    
+    # FSA vs FSA comparison
     analyze_fsa_correction,
     get_correction_feedback,
     get_fsa_feedback,
@@ -36,7 +49,11 @@ from .correction import (
 )
 
 __all__ = [
-    # Main pipeline
+    # Main pipeline (Answer + Params -> Result)
+    "evaluate_fsa",
+    "evaluate_against_test_cases",
+    
+    # FSA vs FSA comparison
     "analyze_fsa_correction",
     "get_correction_feedback",
     "get_fsa_feedback",

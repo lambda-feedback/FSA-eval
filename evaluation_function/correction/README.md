@@ -4,100 +4,133 @@ This module provides diagnostic information for comparing a student's FSA agains
 
 ## Overview
 
-The correction module builds on top of the **validation** and **schemas** modules to create a comprehensive FSA comparison pipeline.
+The correction module builds on top of the **validation** and **schemas** modules to create a comprehensive FSA evaluation pipeline that supports all schema types.
 
-### Pipeline Architecture
+## Main Entry Point: `evaluate_fsa`
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        analyze_fsa_correction()                          │
-├─────────────────────────────────────────────────────────────────────────┤
-│  1. Structural Validation                                                │
-│     └── is_valid_fsa() → List[ValidationError]                          │
-│                                                                          │
-│  2. Structural Analysis                                                  │
-│     └── get_structured_info_of_fsa() → StructuralInfo                   │
-│         ├── is_deterministic() → bool                                    │
-│         ├── is_complete() → bool                                         │
-│         ├── find_unreachable_states() → List[state_id]                  │
-│         └── find_dead_states() → List[state_id]                         │
-│                                                                          │
-│  3. Language Equivalence Check                                           │
-│     └── fsas_accept_same_language()                                      │
-│         ├── hopcroft_minimization() → minimized FSA                      │
-│         └── are_isomorphic() → List[ValidationError]                    │
-│                                                                          │
-│  4. Difference String Generation (if not equivalent)                     │
-│     └── generate_difference_strings()                                    │
-│         └── fsas_accept_same_string() for each test string              │
-│             └── accepts_string() for each FSA                            │
-│                                                                          │
-│  5. Error Identification                                                 │
-│     ├── identify_state_errors()                                          │
-│     │   ├── Trace analysis for acceptance errors                        │
-│     │   ├── find_unreachable_states()                                   │
-│     │   └── find_dead_states()                                          │
-│     └── identify_transition_errors()                                     │
-│         └── Trace comparison between FSAs                                │
-│                                                                          │
-│  6. Result Construction                                                  │
-│     └── CorrectionResult → FSAFeedback (for UI)                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### Integration with Modules
-
-| Module | Function | Purpose in Correction |
-|--------|----------|----------------------|
-| **validation** | `is_valid_fsa` | Validates FSA structure before comparison |
-| **validation** | `is_deterministic` | Checks for NFA behavior |
-| **validation** | `is_complete` | Checks DFA completeness |
-| **validation** | `accepts_string` | Tests individual string acceptance |
-| **validation** | `find_unreachable_states` | Identifies unreachable states |
-| **validation** | `find_dead_states` | Identifies dead states |
-| **validation** | `fsas_accept_same_string` | Compares FSAs on single string |
-| **validation** | `fsas_accept_same_language` | Language equivalence (minimization + isomorphism) |
-| **validation** | `get_structured_info_of_fsa` | Combined structural analysis |
-| **schemas** | `FSA`, `Transition` | FSA data representation |
-| **schemas** | `ValidationError`, `ErrorCode` | Error representation with UI highlighting |
-| **schemas** | `ElementHighlight` | Specifies which element to highlight |
-| **schemas** | `FSAFeedback`, `StructuralInfo` | Structured feedback output |
-| **schemas** | `LanguageComparison`, `TestResult` | Language comparison results |
-
-## Functions
-
-### Main Pipeline Functions
-
-#### `analyze_fsa_correction(student_fsa, expected_fsa, max_length=5, max_differences=10, check_isomorphism=True) -> CorrectionResult`
-
-Main pipeline function that performs comprehensive FSA comparison.
-
-**Pipeline Steps:**
-1. Validate both FSAs using `is_valid_fsa`
-2. Get structural info using `get_structured_info_of_fsa`
-3. Check language equivalence using `fsas_accept_same_language`
-4. Generate difference strings showing where languages differ
-5. Identify state errors using `find_unreachable_states` and `find_dead_states`
-6. Identify transition errors from trace analysis
-
-**Parameters:**
-- `student_fsa`: The student's FSA (FSA schema)
-- `expected_fsa`: The expected/reference FSA (FSA schema)
-- `max_length`: Maximum length of test strings (default: 5)
-- `max_differences`: Maximum number of difference strings (default: 10)
-- `check_isomorphism`: Whether to use minimization + isomorphism check (default: True)
-
-**Returns:** `CorrectionResult` object with comprehensive analysis
-
-#### `get_correction_feedback(student_fsa, expected_fsa, ...) -> dict`
-
-Convenience wrapper that returns correction analysis as a dictionary.
+The `evaluate_fsa` function is the **recommended entry point** for full evaluation. It handles all Answer types and respects Params configuration.
 
 ```python
-from evaluation_function.correction.correction import get_correction_feedback
+from evaluation_function.correction import evaluate_fsa
+from evaluation_function.schemas import FSA, Params, TestCase
+from evaluation_function.schemas.answer import TestCasesAnswer, ReferenceFSAAnswer
 
-feedback = get_correction_feedback(student_fsa, expected_fsa)
-# Returns dict with: is_equivalent, summary, difference_strings, 
+# Example with test cases
+answer = TestCasesAnswer(
+    type="test_cases",
+    value=[
+        TestCase(input="a", expected=True),
+        TestCase(input="b", expected=False),
+    ]
+)
+params = Params(expected_type="DFA", feedback_verbosity="detailed")
+result = evaluate_fsa(student_fsa, answer, params)
+
+# Result is a schemas.result.Result object
+print(result.is_correct)       # bool
+print(result.feedback)         # Human-readable message
+print(result.score)            # Optional partial credit
+print(result.fsa_feedback)     # FSAFeedback for UI
+```
+
+## Full Pipeline Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              evaluate_fsa()                                  │
+│                     (Answer + Params → Result)                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  INPUT SCHEMAS:                                                              │
+│  ├── FSA (student response)                                                 │
+│  ├── Answer (test_cases | reference_fsa | regex | grammar)                  │
+│  └── Params (evaluation_mode, expected_type, feedback_verbosity, etc.)      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  PIPELINE STEPS:                                                             │
+│                                                                              │
+│  1. Structural Validation                                                    │
+│     └── is_valid_fsa() → List[ValidationError]                              │
+│                                                                              │
+│  2. Structural Analysis                                                      │
+│     └── get_structured_info_of_fsa() → StructuralInfo                       │
+│         ├── is_deterministic() → bool                                        │
+│         ├── is_complete() → bool                                             │
+│         ├── find_unreachable_states() → List[state_id]                      │
+│         └── find_dead_states() → List[state_id]                             │
+│                                                                              │
+│  3. Type Constraint Check (from Params.expected_type)                        │
+│     └── is_deterministic() if expected_type="DFA"                           │
+│                                                                              │
+│  4. Completeness Check (if Params.check_completeness)                        │
+│     └── is_complete()                                                        │
+│                                                                              │
+│  5. Language Evaluation (based on Answer type):                              │
+│     ├── TestCasesAnswer:                                                     │
+│     │   └── accepts_string() for each test case                             │
+│     ├── ReferenceFSAAnswer:                                                  │
+│     │   └── analyze_fsa_correction() → full comparison                      │
+│     │       ├── fsas_accept_same_language() (minimization + isomorphism)    │
+│     │       ├── generate_difference_strings()                               │
+│     │       ├── identify_state_errors()                                     │
+│     │       └── identify_transition_errors()                                │
+│     ├── RegexAnswer: (TODO)                                                  │
+│     └── GrammarAnswer: (TODO)                                                │
+│                                                                              │
+│  6. Score Calculation (if Params.evaluation_mode="partial")                  │
+│                                                                              │
+│  7. Feedback Generation (based on Params.feedback_verbosity)                 │
+│                                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  OUTPUT SCHEMA:                                                              │
+│  └── Result                                                                  │
+│      ├── is_correct: bool                                                    │
+│      ├── feedback: str                                                       │
+│      ├── score: Optional[float] (0.0-1.0)                                   │
+│      └── fsa_feedback: FSAFeedback                                          │
+│          ├── summary: str                                                    │
+│          ├── errors: List[ValidationError]                                  │
+│          ├── warnings: List[ValidationError]                                │
+│          ├── structural: StructuralInfo                                     │
+│          ├── language: LanguageComparison                                   │
+│          ├── test_results: List[TestResult]                                 │
+│          └── hints: List[str]                                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## Schema Integration
+
+| Schema | Type | Purpose |
+|--------|------|---------|
+| **FSA** | Input | Student's finite state automaton |
+| **Answer** | Input | Expected language (4 types) |
+| **Params** | Input | Evaluation configuration |
+| **Result** | Output | Complete evaluation result |
+| **FSAFeedback** | Output | Detailed feedback for UI |
+| **ValidationError** | Internal | Errors with ElementHighlight |
+| **StructuralInfo** | Internal | FSA properties |
+| **LanguageComparison** | Internal | Language equivalence result |
+| **TestResult** | Internal | Individual test case results |
+
+### Answer Types
+
+| Type | Schema | Evaluation Method |
+|------|--------|-------------------|
+| `test_cases` | `TestCasesAnswer` | `accepts_string()` for each case |
+| `reference_fsa` | `ReferenceFSAAnswer` | `fsas_accept_same_language()` |
+| `regex` | `RegexAnswer` | TODO: regex_to_fsa conversion |
+| `grammar` | `GrammarAnswer` | TODO: grammar_to_fsa conversion |
+
+### Params Configuration
+
+| Parameter | Effect |
+|-----------|--------|
+| `expected_type="DFA"` | Fails if FSA is non-deterministic |
+| `check_completeness=True` | Checks all (state, symbol) have transitions |
+| `evaluation_mode="partial"` | Returns `score` with partial credit |
+| `feedback_verbosity` | Controls feedback detail level |
+| `highlight_errors=False` | Removes ElementHighlight from errors |
+| `show_counterexample=False` | Hides counterexample string |
+
+## Functions 
 # transition_errors, state_errors, validation_errors, etc.
 ```
 

@@ -7,16 +7,23 @@ Generates diagnostic information for comparing student FSA against expected lang
 
 Leverages validation functions from the validation module for structural analysis.
 Uses Pydantic models from schemas module for consistent data structures.
+
+Supports all Answer types:
+- test_cases: Evaluate against specific test strings
+- reference_fsa: Compare languages via minimization + isomorphism
+- regex: Convert regex to FSA and compare (requires regex_to_fsa)
+- grammar: Convert grammar to FSA and compare (requires grammar_to_fsa)
 """
 
 from itertools import product
-from typing import List, Optional, Tuple, Dict, Set, Literal
+from typing import List, Optional, Tuple, Dict, Set, Literal, Union
 from collections import deque
 from pydantic import BaseModel, Field, computed_field
 
 # Schema imports - using Pydantic models for data structures
-from ..schemas import FSA, ValidationError, ErrorCode, ElementHighlight
-from ..schemas.result import LanguageComparison, TestResult, StructuralInfo, FSAFeedback
+from ..schemas import FSA, ValidationError, ErrorCode, ElementHighlight, Params, TestCase
+from ..schemas.result import LanguageComparison, TestResult, StructuralInfo, FSAFeedback, Result
+from ..schemas.answer import Answer, TestCasesAnswer, ReferenceFSAAnswer, RegexAnswer, GrammarAnswer
 
 # Validation imports - leveraging all available validation functions
 from ..validation.validation import (
@@ -694,3 +701,286 @@ def quick_equivalence_check(
         return False, differences[0].string, differences[0].difference_type
     
     return False, None, None
+
+
+# =============================================================================
+# Full Evaluation Pipeline (Answer + Params -> Result)
+# =============================================================================
+
+def evaluate_against_test_cases(
+    student_fsa: FSA,
+    test_cases: List[TestCase],
+    params: Params
+) -> Tuple[List[TestResult], List[ValidationError]]:
+    """
+    Evaluate student FSA against a list of test cases.
+    
+    Uses accepts_string from validation module for each test case.
+    
+    Returns:
+        Tuple of (test_results, errors)
+    """
+    test_results: List[TestResult] = []
+    errors: List[ValidationError] = []
+    
+    for tc in test_cases:
+        # Use accepts_string from validation - returns [] if accepted
+        accept_errors = accepts_string(student_fsa, tc.input)
+        actual = len(accept_errors) == 0
+        passed = actual == tc.expected
+        
+        # Get trace for feedback
+        _, trace = trace_string(student_fsa, tc.input)
+        
+        test_results.append(TestResult(
+            input=tc.input,
+            expected=tc.expected,
+            actual=actual,
+            passed=passed,
+            trace=trace
+        ))
+        
+        if not passed:
+            action = "accept" if tc.expected else "reject"
+            errors.append(ValidationError(
+                message=f"FSA should {action} '{tc.input}' but it {'rejects' if tc.expected else 'accepts'} it",
+                code=ErrorCode.TEST_CASE_FAILED,
+                severity="error",
+                suggestion=f"Trace the string '{tc.input}' through your FSA to find the issue"
+            ))
+    
+    return test_results, errors
+
+
+def evaluate_fsa(
+    student_fsa: FSA,
+    answer: Answer,
+    params: Optional[Params] = None
+) -> Result:
+    """
+    Main evaluation pipeline: Evaluate student FSA against expected answer.
+    
+    Full Pipeline:
+    1. Parse Answer (test_cases, reference_fsa, regex, grammar)
+    2. Apply Params configuration
+    3. Run appropriate evaluation strategy
+    4. Return Result with FSAFeedback
+    
+    Supports all Answer types from schemas.answer:
+    - TestCasesAnswer: Test FSA on specific strings using accepts_string
+    - ReferenceFSAAnswer: Compare languages using fsas_accept_same_language
+    - RegexAnswer: Convert regex to FSA, then compare (TODO: needs regex_to_fsa)
+    - GrammarAnswer: Convert grammar to FSA, then compare (TODO: needs grammar_to_fsa)
+    
+    Uses Params from schemas.params for configuration:
+    - evaluation_mode: strict/lenient/partial
+    - expected_type: DFA/NFA/any
+    - check_minimality, check_completeness
+    - feedback_verbosity: minimal/standard/detailed
+    - highlight_errors, show_counterexample
+    - max_test_length
+    
+    Returns Result from schemas.result with:
+    - is_correct: Overall correctness
+    - feedback: Human-readable message
+    - score: Optional partial credit score
+    - fsa_feedback: Structured FSAFeedback for UI
+    """
+    # Use default params if not provided
+    if params is None:
+        params = Params()
+    
+    # Initialize result components
+    all_errors: List[ValidationError] = []
+    all_warnings: List[ValidationError] = []
+    test_results: List[TestResult] = []
+    hints: List[str] = []
+    structural_info: Optional[StructuralInfo] = None
+    language_comparison: Optional[LanguageComparison] = None
+    type_mismatch = False  # Track if FSA type doesn't match expected_type
+    
+    # Step 1: Validate student FSA structure using is_valid_fsa
+    validation_errors = is_valid_fsa(student_fsa)
+    if validation_errors:
+        return Result(
+            is_correct=False,
+            feedback="Your FSA has structural errors that must be fixed first.",
+            fsa_feedback=FSAFeedback(
+                summary="Structural validation failed",
+                errors=validation_errors,
+                hints=["Fix the structural errors before testing language correctness"]
+            )
+        )
+    
+    # Step 2: Get structural info using get_structured_info_of_fsa
+    structural_info = get_structured_info_of_fsa(student_fsa)
+    
+    # Step 3: Check expected_type constraint from Params
+    if params.expected_type == "DFA":
+        det_errors = is_deterministic(student_fsa)
+        if det_errors:
+            type_mismatch = True
+            all_errors.extend(det_errors)
+            all_errors.append(ValidationError(
+                message="A DFA is required but your FSA is non-deterministic",
+                code=ErrorCode.WRONG_AUTOMATON_TYPE,
+                severity="error",
+                suggestion="Remove duplicate transitions for the same (state, symbol) pair"
+            ))
+    
+    # Step 4: Check completeness if required by Params
+    if params.check_completeness and structural_info.is_deterministic:
+        comp_errors = is_complete(student_fsa)
+        if comp_errors:
+            if params.evaluation_mode == "strict":
+                all_errors.extend(comp_errors)
+            else:
+                all_warnings.extend(comp_errors)
+    
+    # Step 5: Check for unreachable/dead states (add as warnings)
+    unreachable_errors = find_unreachable_states(student_fsa)
+    dead_errors = find_dead_states(student_fsa)
+    all_warnings.extend(unreachable_errors)
+    all_warnings.extend(dead_errors)
+    
+    if unreachable_errors:
+        hints.append("Consider removing unreachable states or adding transitions to reach them")
+    if dead_errors:
+        hints.append("Dead states can never lead to acceptance - consider adding paths to accepting states")
+    
+    # Step 6: Evaluate based on answer type
+    language_correct = True  # Track language correctness separately
+    
+    if isinstance(answer, TestCasesAnswer):
+        # Test cases evaluation using accepts_string
+        test_results, tc_errors = evaluate_against_test_cases(
+            student_fsa, answer.value, params
+        )
+        all_errors.extend(tc_errors)
+        
+        passed = sum(1 for t in test_results if t.passed)
+        total = len(test_results)
+        language_correct = (passed == total)
+        
+        language_comparison = LanguageComparison(
+            are_equivalent=language_correct,
+            counterexample=next((t.input for t in test_results if not t.passed), None),
+            counterexample_type="should_accept" if any(
+                t.expected and not t.actual for t in test_results if not t.passed
+            ) else "should_reject" if any(
+                not t.expected and t.actual for t in test_results if not t.passed
+            ) else None
+        )
+        
+    elif isinstance(answer, ReferenceFSAAnswer):
+        # Reference FSA evaluation using full correction pipeline
+        reference_fsa = FSA(**answer.value)
+        
+        correction_result = analyze_fsa_correction(
+            student_fsa, reference_fsa,
+            max_length=params.max_test_length,
+            max_differences=10,
+            check_isomorphism=(params.evaluation_mode != "partial")
+        )
+        
+        language_correct = correction_result.is_equivalent
+        all_errors.extend(correction_result.get_all_validation_errors())
+        test_results = correction_result.get_test_results()
+        language_comparison = correction_result.get_language_comparison()
+        hints.extend(correction_result.to_fsa_feedback().hints)
+        
+    elif isinstance(answer, RegexAnswer):
+        # Regex evaluation - requires regex_to_fsa conversion
+        # TODO: Implement regex_to_fsa in algorithms module
+        all_errors.append(ValidationError(
+            message="Regex answer type not yet implemented",
+            code=ErrorCode.EVALUATION_ERROR,
+            severity="error",
+            suggestion="Use test_cases or reference_fsa answer type instead"
+        ))
+        language_correct = False
+        
+    elif isinstance(answer, GrammarAnswer):
+        # Grammar evaluation - requires grammar_to_fsa conversion
+        # TODO: Implement grammar_to_fsa in algorithms module
+        all_errors.append(ValidationError(
+            message="Grammar answer type not yet implemented",
+            code=ErrorCode.EVALUATION_ERROR,
+            severity="error",
+            suggestion="Use test_cases or reference_fsa answer type instead"
+        ))
+        language_correct = False
+    
+    # Combine type check and language check for final is_correct
+    is_correct = (not type_mismatch) and language_correct
+    
+    # Step 7: Calculate score for partial credit mode
+    score: Optional[float] = None
+    if params.evaluation_mode == "partial" and test_results:
+        passed = sum(1 for t in test_results if t.passed)
+        score = passed / len(test_results)
+    
+    # Step 8: Generate feedback message based on verbosity
+    if is_correct:
+        feedback = "Correct! Your FSA accepts the expected language."
+    else:
+        if params.feedback_verbosity == "minimal":
+            feedback = "Incorrect."
+        elif params.feedback_verbosity == "standard":
+            if language_comparison and language_comparison.counterexample:
+                ce = language_comparison.counterexample
+                ce_type = language_comparison.counterexample_type
+                if ce_type == "should_accept":
+                    feedback = f"Your FSA rejects '{ce}' but it should accept it."
+                else:
+                    feedback = f"Your FSA accepts '{ce}' but it should reject it."
+            else:
+                feedback = "Your FSA does not accept the expected language."
+        else:  # detailed
+            parts = []
+            if language_comparison and language_comparison.counterexample:
+                ce = language_comparison.counterexample
+                ce_type = language_comparison.counterexample_type
+                if ce_type == "should_accept":
+                    parts.append(f"Your FSA rejects '{ce}' but it should accept it")
+                else:
+                    parts.append(f"Your FSA accepts '{ce}' but it should reject it")
+            if test_results:
+                passed = sum(1 for t in test_results if t.passed)
+                parts.append(f"Passed {passed}/{len(test_results)} test cases")
+            if structural_info:
+                if structural_info.unreachable_states:
+                    parts.append(f"Has {len(structural_info.unreachable_states)} unreachable state(s)")
+                if structural_info.dead_states:
+                    parts.append(f"Has {len(structural_info.dead_states)} dead state(s)")
+            feedback = ". ".join(parts) + "." if parts else "Your FSA does not accept the expected language."
+    
+    # Step 9: Filter output based on params
+    if not params.highlight_errors:
+        # Remove highlight info from errors
+        for e in all_errors:
+            e.highlight = None
+        for w in all_warnings:
+            w.highlight = None
+    
+    if not params.show_counterexample and language_comparison:
+        language_comparison.counterexample = None
+        language_comparison.counterexample_type = None
+    
+    # Step 10: Build and return Result
+    fsa_feedback = FSAFeedback(
+        summary=f"{'Correct' if is_correct else 'Incorrect'}: {len(all_errors)} error(s), {len(all_warnings)} warning(s)",
+        errors=all_errors,
+        warnings=all_warnings,
+        structural=structural_info,
+        language=language_comparison,
+        test_results=test_results,
+        hints=hints[:5]  # Limit hints
+    )
+    
+    return Result(
+        is_correct=is_correct,
+        feedback=feedback,
+        score=score,
+        fsa_feedback=fsa_feedback
+    )

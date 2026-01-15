@@ -6,9 +6,10 @@ Tests leverage validation functions where applicable.
 """
 
 import pytest
-from evaluation_function.schemas import FSA, ValidationError, ErrorCode
+from evaluation_function.schemas import FSA, ValidationError, ErrorCode, Params, TestCase
 from evaluation_function.schemas.utils import make_fsa
-from evaluation_function.schemas.result import FSAFeedback, LanguageComparison, TestResult
+from evaluation_function.schemas.result import FSAFeedback, LanguageComparison, TestResult, Result
+from evaluation_function.schemas.answer import TestCasesAnswer, ReferenceFSAAnswer
 from evaluation_function.correction.correction import (
     DifferenceString,
     TransitionError,
@@ -24,6 +25,8 @@ from evaluation_function.correction.correction import (
     get_fsa_feedback,
     check_fsa_properties,
     quick_equivalence_check,
+    evaluate_fsa,
+    evaluate_against_test_cases,
 )
 
 
@@ -421,6 +424,171 @@ class TestEdgeCases:
         )
         props = check_fsa_properties(nfa)
         assert props["is_deterministic"] is False
+
+
+# =============================================================================
+# Test Full Evaluation Pipeline (evaluate_fsa)
+# =============================================================================
+
+class TestEvaluateFsa:
+    """Test the full evaluation pipeline with Answer and Params schemas."""
+
+    def test_evaluate_with_test_cases_all_pass(self, dfa_accepts_a):
+        """Test evaluation with TestCasesAnswer - all passing."""
+        answer = TestCasesAnswer(
+            type="test_cases",
+            value=[
+                TestCase(input="a", expected=True),
+                TestCase(input="b", expected=False),
+                TestCase(input="aa", expected=False),
+            ]
+        )
+        result = evaluate_fsa(dfa_accepts_a, answer)
+        assert isinstance(result, Result)
+        assert result.is_correct is True
+        assert "Correct" in result.feedback
+
+    def test_evaluate_with_test_cases_some_fail(self, dfa_accepts_a):
+        """Test evaluation with TestCasesAnswer - some failing."""
+        answer = TestCasesAnswer(
+            type="test_cases",
+            value=[
+                TestCase(input="a", expected=True),
+                TestCase(input="b", expected=True),  # This should fail
+            ]
+        )
+        result = evaluate_fsa(dfa_accepts_a, answer)
+        assert result.is_correct is False
+        assert result.fsa_feedback is not None
+        assert len(result.fsa_feedback.errors) > 0
+
+    def test_evaluate_with_reference_fsa_equivalent(self, dfa_accepts_a, equivalent_dfa):
+        """Test evaluation with ReferenceFSAAnswer - equivalent FSAs."""
+        answer = ReferenceFSAAnswer(
+            type="reference_fsa",
+            value=equivalent_dfa.model_dump()
+        )
+        result = evaluate_fsa(dfa_accepts_a, answer)
+        assert result.is_correct is True
+
+    def test_evaluate_with_reference_fsa_different(self, dfa_accepts_a, dfa_accepts_a_or_b):
+        """Test evaluation with ReferenceFSAAnswer - different FSAs."""
+        answer = ReferenceFSAAnswer(
+            type="reference_fsa",
+            value=dfa_accepts_a_or_b.model_dump()
+        )
+        result = evaluate_fsa(dfa_accepts_a, answer)
+        assert result.is_correct is False
+        assert result.fsa_feedback.language is not None
+        assert result.fsa_feedback.language.are_equivalent is False
+
+    def test_evaluate_with_params_strict_dfa(self, dfa_accepts_a):
+        """Test evaluation with Params requiring DFA."""
+        params = Params(expected_type="DFA")
+        answer = TestCasesAnswer(
+            type="test_cases",
+            value=[TestCase(input="a", expected=True)]
+        )
+        result = evaluate_fsa(dfa_accepts_a, answer, params)
+        assert result.is_correct is True
+
+    def test_evaluate_with_params_strict_dfa_fails_nfa(self):
+        """Test that NFA fails when DFA is required."""
+        nfa = make_fsa(
+            states=["q0", "q1", "q2"],
+            alphabet=["a"],
+            transitions=[
+                {"from_state": "q0", "to_state": "q1", "symbol": "a"},
+                {"from_state": "q0", "to_state": "q2", "symbol": "a"},
+            ],
+            initial="q0",
+            accept=["q1"]
+        )
+        params = Params(expected_type="DFA")
+        answer = TestCasesAnswer(
+            type="test_cases",
+            value=[TestCase(input="a", expected=True)]
+        )
+        result = evaluate_fsa(nfa, answer, params)
+        assert result.is_correct is False
+        assert any(e.code == ErrorCode.WRONG_AUTOMATON_TYPE for e in result.fsa_feedback.errors)
+
+    def test_evaluate_with_partial_credit(self, dfa_accepts_a):
+        """Test partial credit mode."""
+        params = Params(evaluation_mode="partial")
+        answer = TestCasesAnswer(
+            type="test_cases",
+            value=[
+                TestCase(input="a", expected=True),
+                TestCase(input="b", expected=True),  # Will fail
+                TestCase(input="aa", expected=False),
+            ]
+        )
+        result = evaluate_fsa(dfa_accepts_a, answer, params)
+        assert result.score is not None
+        assert result.score == pytest.approx(2/3)  # 2 pass, 1 fail
+
+    def test_evaluate_with_minimal_feedback(self, dfa_accepts_a):
+        """Test minimal feedback verbosity."""
+        params = Params(feedback_verbosity="minimal")
+        answer = TestCasesAnswer(
+            type="test_cases",
+            value=[TestCase(input="b", expected=True)]  # Will fail
+        )
+        result = evaluate_fsa(dfa_accepts_a, answer, params)
+        assert result.feedback == "Incorrect."
+
+    def test_evaluate_invalid_fsa(self):
+        """Test evaluation of invalid FSA."""
+        invalid = make_fsa(
+            states=["q0"],
+            alphabet=["a"],
+            transitions=[],
+            initial="invalid",  # Invalid initial state
+            accept=[]
+        )
+        answer = TestCasesAnswer(
+            type="test_cases",
+            value=[TestCase(input="a", expected=True)]
+        )
+        result = evaluate_fsa(invalid, answer)
+        assert result.is_correct is False
+        assert "structural errors" in result.feedback
+
+    def test_evaluate_without_counterexample(self, dfa_accepts_a, dfa_accepts_a_or_b):
+        """Test hiding counterexample via params."""
+        params = Params(show_counterexample=False)
+        answer = ReferenceFSAAnswer(
+            type="reference_fsa",
+            value=dfa_accepts_a_or_b.model_dump()
+        )
+        result = evaluate_fsa(dfa_accepts_a, answer, params)
+        assert result.fsa_feedback.language.counterexample is None
+
+
+class TestEvaluateAgainstTestCases:
+    """Test evaluate_against_test_cases helper."""
+
+    def test_all_pass(self, dfa_accepts_a):
+        test_cases = [
+            TestCase(input="a", expected=True),
+            TestCase(input="b", expected=False),
+        ]
+        results, errors = evaluate_against_test_cases(dfa_accepts_a, test_cases, Params())
+        assert len(results) == 2
+        assert all(r.passed for r in results)
+        assert len(errors) == 0
+
+    def test_some_fail(self, dfa_accepts_a):
+        test_cases = [
+            TestCase(input="a", expected=True),
+            TestCase(input="b", expected=True),  # Should fail
+        ]
+        results, errors = evaluate_against_test_cases(dfa_accepts_a, test_cases, Params())
+        assert results[0].passed is True
+        assert results[1].passed is False
+        assert len(errors) == 1
+        assert errors[0].code == ErrorCode.TEST_CASE_FAILED
 
 
 if __name__ == "__main__":
