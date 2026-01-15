@@ -224,7 +224,8 @@ def trace_string(fsa: FSA, string: str) -> Tuple[bool, List[str]]:
     Trace execution of a string through an FSA.
     Returns (accepted, state_trace).
     """
-    if is_valid_fsa(fsa):  # Returns errors if invalid
+    # is_valid_fsa returns List[ValidationError] - non-empty means invalid
+    if is_valid_fsa(fsa):  
         return False, []
     
     current_states: Set[str] = {fsa.initial_state}
@@ -252,12 +253,24 @@ def trace_string(fsa: FSA, string: str) -> Tuple[bool, List[str]]:
 
 
 def fsa_accepts(fsa: FSA, string: str) -> bool:
-    """Check if FSA accepts string. Leverages accepts_string from validation."""
+    """
+    Check if FSA accepts string.
+    
+    Leverages accepts_string from validation module:
+    - Returns [] if accepted (empty error list = accepted)
+    - Returns [ValidationError] if rejected
+    """
     return len(accepts_string(fsa, string)) == 0
 
 
 def _fsas_differ_on_string(fsa1: FSA, fsa2: FSA, string: str) -> bool:
-    """Check if FSAs differ on string. Leverages fsas_accept_same_string from validation."""
+    """
+    Check if two FSAs differ on a given string.
+    
+    Leverages fsas_accept_same_string from validation module:
+    - Returns [] if both FSAs agree on the string
+    - Returns [ValidationError] with LANGUAGE_MISMATCH if they differ
+    """
     return len(fsas_accept_same_string(fsa1, fsa2, string)) > 0
 
 
@@ -271,10 +284,25 @@ def generate_difference_strings(
     max_length: int = 5,
     max_differences: int = 10
 ) -> List[DifferenceString]:
-    """Generate strings demonstrating differences between FSAs."""
+    """
+    Generate strings demonstrating differences between two FSAs.
+    
+    Uses fsas_accept_same_string from validation to efficiently check
+    if FSAs differ on each test string.
+    
+    Args:
+        student_fsa: The student's FSA to compare
+        expected_fsa: The expected/reference FSA
+        max_length: Maximum string length to test (default: 5)
+        max_differences: Maximum number of differences to find (default: 10)
+    
+    Returns:
+        List of DifferenceString objects showing where FSAs differ
+    """
     differences: List[DifferenceString] = []
     
-    # Validate using is_valid_fsa
+    # Validate both FSAs using is_valid_fsa from validation
+    # is_valid_fsa returns List[ValidationError] - non-empty means invalid
     if is_valid_fsa(student_fsa) or is_valid_fsa(expected_fsa):
         return differences
     
@@ -315,7 +343,20 @@ def identify_state_errors(
     expected_fsa: FSA,
     difference_strings: List[DifferenceString]
 ) -> List[StateError]:
-    """Identify state-level errors using find_unreachable_states and find_dead_states."""
+    """
+    Identify state-level errors in the student FSA.
+    
+    Uses validation module functions:
+    - find_unreachable_states: States not reachable from initial state
+    - find_dead_states: States that cannot reach any accepting state
+    
+    Also analyzes difference strings to find:
+    - States that should be accepting but aren't
+    - States that shouldn't be accepting but are
+    
+    Each StateError can be converted to ValidationError for UI highlighting
+    using the to_validation_error() method.
+    """
     state_errors: List[StateError] = []
     seen_states: Set[str] = set()
     
@@ -367,7 +408,18 @@ def identify_transition_errors(
     expected_fsa: FSA,
     difference_strings: List[DifferenceString]
 ) -> List[TransitionError]:
-    """Identify transition-level errors by analyzing traces."""
+    """
+    Identify transition-level errors by analyzing execution traces.
+    
+    Compares transitions between student and expected FSAs to find:
+    - wrong_destination: Transition goes to wrong state
+    - missing: Required transition not defined
+    - extra: Unnecessary transition causing incorrect behavior
+    
+    Each TransitionError can be converted to ValidationError for UI
+    highlighting using the to_validation_error() method, which creates
+    proper ElementHighlight for the frontend to display.
+    """
     transition_errors: List[TransitionError] = []
     seen_transitions: Set[Tuple[str, str]] = set()
     
@@ -454,11 +506,31 @@ def analyze_fsa_correction(
     """
     Main pipeline: Analyze student FSA against expected FSA.
     
-    Leverages validation functions:
-    - is_valid_fsa, is_deterministic, is_complete
-    - find_unreachable_states, find_dead_states
-    - accepts_string, fsas_accept_same_string, fsas_accept_same_language
-    - are_isomorphic, get_structured_info_of_fsa
+    Pipeline Steps (leveraging validation module):
+    1. Validate structure: is_valid_fsa() checks states, transitions, alphabet
+    2. Get structural info: get_structured_info_of_fsa() provides determinism,
+       completeness, unreachable/dead states
+    3. Check equivalence: fsas_accept_same_language() uses minimization + 
+       isomorphism via are_isomorphic() for efficient comparison
+    4. Generate differences: fsas_accept_same_string() tests individual strings
+    5. Identify state errors: find_unreachable_states(), find_dead_states()
+    6. Identify transition errors: Trace analysis from difference strings
+    
+    Validation Functions Used:
+    - is_valid_fsa: Structural validation (states, transitions, symbols)
+    - is_deterministic: Checks for multiple transitions on same (state, symbol)
+    - is_complete: Checks if every (state, symbol) has a transition
+    - find_unreachable_states: BFS from initial state
+    - find_dead_states: Backward BFS from accept states
+    - accepts_string: Simulates FSA on a string
+    - fsas_accept_same_string: Compares FSAs on single string
+    - fsas_accept_same_language: Minimization + isomorphism check
+    - get_structured_info_of_fsa: Combined structural analysis
+    
+    Schema Integration:
+    - Returns CorrectionResult with Pydantic model_dump() support
+    - Use to_fsa_feedback() to get FSAFeedback schema for UI
+    - All errors convertible to ValidationError with ElementHighlight
     """
     result = CorrectionResult()
     

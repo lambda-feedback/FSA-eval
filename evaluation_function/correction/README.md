@@ -4,11 +4,65 @@ This module provides diagnostic information for comparing a student's FSA agains
 
 ## Overview
 
-The correction module builds a pipeline that:
-1. Validates both FSAs structurally
-2. Checks language equivalence using minimization and isomorphism
-3. Generates strings demonstrating language differences
-4. Identifies specific states and transitions causing errors
+The correction module builds on top of the **validation** and **schemas** modules to create a comprehensive FSA comparison pipeline.
+
+### Pipeline Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        analyze_fsa_correction()                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│  1. Structural Validation                                                │
+│     └── is_valid_fsa() → List[ValidationError]                          │
+│                                                                          │
+│  2. Structural Analysis                                                  │
+│     └── get_structured_info_of_fsa() → StructuralInfo                   │
+│         ├── is_deterministic() → bool                                    │
+│         ├── is_complete() → bool                                         │
+│         ├── find_unreachable_states() → List[state_id]                  │
+│         └── find_dead_states() → List[state_id]                         │
+│                                                                          │
+│  3. Language Equivalence Check                                           │
+│     └── fsas_accept_same_language()                                      │
+│         ├── hopcroft_minimization() → minimized FSA                      │
+│         └── are_isomorphic() → List[ValidationError]                    │
+│                                                                          │
+│  4. Difference String Generation (if not equivalent)                     │
+│     └── generate_difference_strings()                                    │
+│         └── fsas_accept_same_string() for each test string              │
+│             └── accepts_string() for each FSA                            │
+│                                                                          │
+│  5. Error Identification                                                 │
+│     ├── identify_state_errors()                                          │
+│     │   ├── Trace analysis for acceptance errors                        │
+│     │   ├── find_unreachable_states()                                   │
+│     │   └── find_dead_states()                                          │
+│     └── identify_transition_errors()                                     │
+│         └── Trace comparison between FSAs                                │
+│                                                                          │
+│  6. Result Construction                                                  │
+│     └── CorrectionResult → FSAFeedback (for UI)                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Integration with Modules
+
+| Module | Function | Purpose in Correction |
+|--------|----------|----------------------|
+| **validation** | `is_valid_fsa` | Validates FSA structure before comparison |
+| **validation** | `is_deterministic` | Checks for NFA behavior |
+| **validation** | `is_complete` | Checks DFA completeness |
+| **validation** | `accepts_string` | Tests individual string acceptance |
+| **validation** | `find_unreachable_states` | Identifies unreachable states |
+| **validation** | `find_dead_states` | Identifies dead states |
+| **validation** | `fsas_accept_same_string` | Compares FSAs on single string |
+| **validation** | `fsas_accept_same_language` | Language equivalence (minimization + isomorphism) |
+| **validation** | `get_structured_info_of_fsa` | Combined structural analysis |
+| **schemas** | `FSA`, `Transition` | FSA data representation |
+| **schemas** | `ValidationError`, `ErrorCode` | Error representation with UI highlighting |
+| **schemas** | `ElementHighlight` | Specifies which element to highlight |
+| **schemas** | `FSAFeedback`, `StructuralInfo` | Structured feedback output |
+| **schemas** | `LanguageComparison`, `TestResult` | Language comparison results |
 
 ## Functions
 
