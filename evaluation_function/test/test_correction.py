@@ -6,7 +6,7 @@ Tests the simplified correction module that leverages validation.are_isomorphic(
 """
 
 import pytest
-from evaluation_function.schemas import FSA, ValidationError, ErrorCode
+from evaluation_function.schemas import ValidationError, ErrorCode
 from evaluation_function.schemas.utils import make_fsa
 from evaluation_function.schemas.result import FSAFeedback, LanguageComparison
 from evaluation_function.correction import (
