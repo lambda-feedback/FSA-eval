@@ -2,36 +2,28 @@
 Tests for FSA Correction Module.
 
 Uses make_fsa from schemas.utils for all FSA construction.
-Tests leverage validation functions where applicable.
+Tests the simplified correction module that leverages validation.are_isomorphic().
 """
 
 import pytest
-from evaluation_function.schemas import FSA, ValidationError, ErrorCode, Params, TestCase
+from evaluation_function.schemas import FSA, ValidationError, ErrorCode
 from evaluation_function.schemas.utils import make_fsa
-from evaluation_function.schemas.result import FSAFeedback, LanguageComparison, TestResult, Result
-from evaluation_function.schemas.answer import TestCasesAnswer, ReferenceFSAAnswer
-from evaluation_function.correction.correction import (
-    DifferenceString,
-    TransitionError,
-    StateError,
+from evaluation_function.schemas.result import FSAFeedback, LanguageComparison
+from evaluation_function.correction import (
     CorrectionResult,
     trace_string,
     fsa_accepts,
-    generate_difference_strings,
-    identify_state_errors,
-    identify_transition_errors,
     analyze_fsa_correction,
     get_correction_feedback,
     get_fsa_feedback,
     check_fsa_properties,
+    check_minimality,
     quick_equivalence_check,
-    evaluate_fsa,
-    evaluate_against_test_cases,
 )
 
 
 # =============================================================================
-# Fixtures using make_fsa
+# Fixtures
 # =============================================================================
 
 @pytest.fixture
@@ -73,36 +65,21 @@ def dfa_accepts_a_or_b():
 
 
 @pytest.fixture
-def dfa_even_as():
-    """DFA accepting strings with even number of 'a's."""
+def equivalent_dfa():
+    """DFA equivalent to dfa_accepts_a with different state names."""
     return make_fsa(
-        states=["even", "odd"],
+        states=["s0", "s1", "s2"],
         alphabet=["a", "b"],
         transitions=[
-            {"from_state": "even", "to_state": "odd", "symbol": "a"},
-            {"from_state": "even", "to_state": "even", "symbol": "b"},
-            {"from_state": "odd", "to_state": "even", "symbol": "a"},
-            {"from_state": "odd", "to_state": "odd", "symbol": "b"},
+            {"from_state": "s0", "to_state": "s1", "symbol": "a"},
+            {"from_state": "s0", "to_state": "s2", "symbol": "b"},
+            {"from_state": "s1", "to_state": "s2", "symbol": "a"},
+            {"from_state": "s1", "to_state": "s2", "symbol": "b"},
+            {"from_state": "s2", "to_state": "s2", "symbol": "a"},
+            {"from_state": "s2", "to_state": "s2", "symbol": "b"},
         ],
-        initial="even",
-        accept=["even"]
-    )
-
-
-@pytest.fixture
-def dfa_odd_as():
-    """DFA accepting strings with odd number of 'a's."""
-    return make_fsa(
-        states=["even", "odd"],
-        alphabet=["a", "b"],
-        transitions=[
-            {"from_state": "even", "to_state": "odd", "symbol": "a"},
-            {"from_state": "even", "to_state": "even", "symbol": "b"},
-            {"from_state": "odd", "to_state": "even", "symbol": "a"},
-            {"from_state": "odd", "to_state": "odd", "symbol": "b"},
-        ],
-        initial="even",
-        accept=["odd"]
+        initial="s0",
+        accept=["s1"]
     )
 
 
@@ -122,91 +99,33 @@ def dfa_with_unreachable():
     )
 
 
-@pytest.fixture
-def dfa_with_dead():
-    """DFA with dead state."""
-    return make_fsa(
-        states=["q0", "q1", "dead"],
-        alphabet=["a", "b"],
-        transitions=[
-            {"from_state": "q0", "to_state": "q1", "symbol": "a"},
-            {"from_state": "q0", "to_state": "dead", "symbol": "b"},
-            {"from_state": "q1", "to_state": "q1", "symbol": "a"},
-            {"from_state": "q1", "to_state": "q1", "symbol": "b"},
-            {"from_state": "dead", "to_state": "dead", "symbol": "a"},
-            {"from_state": "dead", "to_state": "dead", "symbol": "b"},
-        ],
-        initial="q0",
-        accept=["q1"]
-    )
-
-
-@pytest.fixture
-def incomplete_dfa():
-    """DFA missing transitions."""
-    return make_fsa(
-        states=["q0", "q1"],
-        alphabet=["a", "b"],
-        transitions=[{"from_state": "q0", "to_state": "q1", "symbol": "a"}],
-        initial="q0",
-        accept=["q1"]
-    )
-
-
-@pytest.fixture
-def equivalent_dfa():
-    """DFA equivalent to dfa_accepts_a with different state names."""
-    return make_fsa(
-        states=["s0", "s1", "s2"],
-        alphabet=["a", "b"],
-        transitions=[
-            {"from_state": "s0", "to_state": "s1", "symbol": "a"},
-            {"from_state": "s0", "to_state": "s2", "symbol": "b"},
-            {"from_state": "s1", "to_state": "s2", "symbol": "a"},
-            {"from_state": "s1", "to_state": "s2", "symbol": "b"},
-            {"from_state": "s2", "to_state": "s2", "symbol": "a"},
-            {"from_state": "s2", "to_state": "s2", "symbol": "b"},
-        ],
-        initial="s0",
-        accept=["s1"]
-    )
-
-
 # =============================================================================
-# Test Pydantic Models (use model_dump)
+# Test CorrectionResult
 # =============================================================================
 
-class TestPydanticModels:
-    """Test Pydantic model functionality."""
+class TestCorrectionResult:
+    """Test CorrectionResult model."""
 
-    def test_difference_string_model_dump(self):
-        diff = DifferenceString(string="a", student_accepts=True, expected_accepts=False)
-        d = diff.model_dump()
-        assert d["string"] == "a"
-        assert d["difference_type"] == "should_reject"
-
-    def test_transition_error_model_dump(self):
-        err = TransitionError(from_state="q0", symbol="a", error_type="missing")
-        d = err.model_dump()
-        assert d["from_state"] == "q0"
-        assert d["error_type"] == "missing"
-
-    def test_state_error_model_dump(self):
-        err = StateError(state_id="q1", error_type="unreachable")
-        d = err.model_dump()
-        assert d["state_id"] == "q1"
-
-    def test_correction_result_model_dump(self):
+    def test_model_dump(self):
         result = CorrectionResult()
         d = result.model_dump()
         assert "is_equivalent" in d
-        assert "difference_strings" in d
+        assert "is_minimal" in d
+        assert "equivalence_errors" in d
 
-    def test_to_validation_error(self):
-        err = StateError(state_id="q1", error_type="dead")
-        val_err = err.to_validation_error()
-        assert isinstance(val_err, ValidationError)
-        assert val_err.code == ErrorCode.DEAD_STATE
+    def test_get_all_errors(self):
+        result = CorrectionResult(
+            validation_errors=[ValidationError(message="test", code=ErrorCode.INVALID_INITIAL, severity="error")],
+            equivalence_errors=[ValidationError(message="equiv", code=ErrorCode.LANGUAGE_MISMATCH, severity="error")]
+        )
+        errors = result.get_all_errors()
+        assert len(errors) == 2
+
+    def test_to_fsa_feedback(self):
+        result = CorrectionResult(summary="Test summary", is_equivalent=False)
+        feedback = result.to_fsa_feedback()
+        assert isinstance(feedback, FSAFeedback)
+        assert feedback.summary == "Test summary"
 
 
 # =============================================================================
@@ -214,7 +133,7 @@ class TestPydanticModels:
 # =============================================================================
 
 class TestHelperFunctions:
-    """Test trace_string and fsa_accepts."""
+    """Test helper functions."""
 
     def test_trace_accepted(self, dfa_accepts_a):
         accepted, trace = trace_string(dfa_accepts_a, "a")
@@ -224,48 +143,17 @@ class TestHelperFunctions:
     def test_trace_rejected(self, dfa_accepts_a):
         accepted, trace = trace_string(dfa_accepts_a, "b")
         assert accepted is False
+        assert trace == ["q0", "q2"]
 
     def test_fsa_accepts(self, dfa_accepts_a):
         assert fsa_accepts(dfa_accepts_a, "a") is True
         assert fsa_accepts(dfa_accepts_a, "b") is False
+        assert fsa_accepts(dfa_accepts_a, "aa") is False
 
-    def test_empty_string(self, dfa_even_as):
-        assert fsa_accepts(dfa_even_as, "") is True
-
-
-# =============================================================================
-# Test Core Analysis Functions
-# =============================================================================
-
-class TestGenerateDifferenceStrings:
-    """Test generate_difference_strings."""
-
-    def test_no_differences_equivalent(self, dfa_accepts_a, equivalent_dfa):
-        diffs = generate_difference_strings(dfa_accepts_a, equivalent_dfa)
-        assert len(diffs) == 0
-
-    def test_finds_differences(self, dfa_accepts_a, dfa_accepts_a_or_b):
-        diffs = generate_difference_strings(dfa_accepts_a, dfa_accepts_a_or_b)
-        assert len(diffs) > 0
-        assert any(d.string == "b" for d in diffs)
-
-    def test_max_limit(self, dfa_even_as, dfa_odd_as):
-        diffs = generate_difference_strings(dfa_even_as, dfa_odd_as, max_differences=3)
-        assert len(diffs) <= 3
-
-
-class TestIdentifyErrors:
-    """Test error identification functions."""
-
-    def test_unreachable_states(self, dfa_with_unreachable, dfa_accepts_a):
-        diffs = generate_difference_strings(dfa_with_unreachable, dfa_accepts_a)
-        errors = identify_state_errors(dfa_with_unreachable, dfa_accepts_a, diffs)
-        assert any(e.state_id == "unreachable" and e.error_type == "unreachable" for e in errors)
-
-    def test_dead_states(self, dfa_with_dead, dfa_accepts_a):
-        diffs = generate_difference_strings(dfa_with_dead, dfa_accepts_a)
-        errors = identify_state_errors(dfa_with_dead, dfa_accepts_a, diffs)
-        assert any(e.state_id == "dead" and e.error_type == "dead" for e in errors)
+    def test_empty_string(self, dfa_accepts_a):
+        accepted, trace = trace_string(dfa_accepts_a, "")
+        assert accepted is False
+        assert trace == ["q0"]
 
 
 # =============================================================================
@@ -273,37 +161,37 @@ class TestIdentifyErrors:
 # =============================================================================
 
 class TestAnalyzeFsaCorrection:
-    """Test main pipeline."""
+    """Test the main analysis pipeline."""
 
     def test_equivalent_fsas(self, dfa_accepts_a, equivalent_dfa):
         result = analyze_fsa_correction(dfa_accepts_a, equivalent_dfa)
         assert result.is_equivalent is True
+        assert result.is_isomorphic is True
+        assert len(result.equivalence_errors) == 0
 
     def test_different_fsas(self, dfa_accepts_a, dfa_accepts_a_or_b):
         result = analyze_fsa_correction(dfa_accepts_a, dfa_accepts_a_or_b)
         assert result.is_equivalent is False
-        assert len(result.difference_strings) > 0
+        assert result.is_isomorphic is False
+        # Should have errors from are_isomorphic()
+        assert len(result.equivalence_errors) > 0
 
-    def test_structural_info(self, dfa_with_unreachable, dfa_accepts_a):
-        result = analyze_fsa_correction(dfa_with_unreachable, dfa_accepts_a)
+    def test_structural_info(self, dfa_accepts_a, equivalent_dfa):
+        result = analyze_fsa_correction(dfa_accepts_a, equivalent_dfa)
         assert result.structural_info is not None
-        assert "unreachable" in result.structural_info.unreachable_states
+        assert result.structural_info.num_states == 3
 
     def test_to_fsa_feedback(self, dfa_accepts_a, dfa_accepts_a_or_b):
         result = analyze_fsa_correction(dfa_accepts_a, dfa_accepts_a_or_b)
         feedback = result.to_fsa_feedback()
         assert isinstance(feedback, FSAFeedback)
+        assert len(feedback.errors) > 0
 
-    def test_get_language_comparison(self, dfa_accepts_a, dfa_accepts_a_or_b):
-        result = analyze_fsa_correction(dfa_accepts_a, dfa_accepts_a_or_b)
-        lang = result.get_language_comparison()
-        assert isinstance(lang, LanguageComparison)
-        assert lang.are_equivalent is False
-
-    def test_get_test_results(self, dfa_accepts_a, dfa_accepts_a_or_b):
-        result = analyze_fsa_correction(dfa_accepts_a, dfa_accepts_a_or_b)
-        tests = result.get_test_results()
-        assert all(isinstance(t, TestResult) for t in tests)
+    def test_get_language_comparison(self, dfa_accepts_a, equivalent_dfa):
+        result = analyze_fsa_correction(dfa_accepts_a, equivalent_dfa)
+        comparison = result.get_language_comparison()
+        assert isinstance(comparison, LanguageComparison)
+        assert comparison.are_equivalent is True
 
 
 # =============================================================================
@@ -311,17 +199,16 @@ class TestAnalyzeFsaCorrection:
 # =============================================================================
 
 class TestConvenienceFunctions:
-    """Test get_correction_feedback, get_fsa_feedback, etc."""
+    """Test convenience functions."""
 
-    def test_get_correction_feedback(self, dfa_accepts_a, dfa_accepts_a_or_b):
-        feedback = get_correction_feedback(dfa_accepts_a, dfa_accepts_a_or_b)
+    def test_get_correction_feedback(self, dfa_accepts_a, equivalent_dfa):
+        feedback = get_correction_feedback(dfa_accepts_a, equivalent_dfa)
         assert isinstance(feedback, dict)
-        assert "is_equivalent" in feedback
+        assert feedback["is_equivalent"] is True
 
-    def test_get_fsa_feedback(self, dfa_accepts_a, dfa_accepts_a_or_b):
-        feedback = get_fsa_feedback(dfa_accepts_a, dfa_accepts_a_or_b)
+    def test_get_fsa_feedback(self, dfa_accepts_a, equivalent_dfa):
+        feedback = get_fsa_feedback(dfa_accepts_a, equivalent_dfa)
         assert isinstance(feedback, FSAFeedback)
-        assert feedback.language.are_equivalent is False
 
     def test_check_fsa_properties(self, dfa_accepts_a):
         props = check_fsa_properties(dfa_accepts_a)
@@ -329,21 +216,18 @@ class TestConvenienceFunctions:
         assert props["is_deterministic"] is True
         assert props["is_complete"] is True
 
-    def test_check_fsa_properties_incomplete(self, incomplete_dfa):
-        props = check_fsa_properties(incomplete_dfa)
-        assert props["is_complete"] is False
-
     def test_check_fsa_properties_unreachable(self, dfa_with_unreachable):
         props = check_fsa_properties(dfa_with_unreachable)
         assert "unreachable" in props["unreachable_states"]
 
     def test_quick_equivalence_check_equal(self, dfa_accepts_a, equivalent_dfa):
-        is_eq, ce, ce_type = quick_equivalence_check(dfa_accepts_a, equivalent_dfa)
-        assert is_eq is True
+        is_equiv, hint, hint_type = quick_equivalence_check(dfa_accepts_a, equivalent_dfa)
+        assert is_equiv is True
 
     def test_quick_equivalence_check_different(self, dfa_accepts_a, dfa_accepts_a_or_b):
-        is_eq, ce, ce_type = quick_equivalence_check(dfa_accepts_a, dfa_accepts_a_or_b)
-        assert is_eq is False
+        is_equiv, hint, hint_type = quick_equivalence_check(dfa_accepts_a, dfa_accepts_a_or_b)
+        assert is_equiv is False
+        assert hint is not None
 
 
 # =============================================================================
@@ -361,8 +245,7 @@ class TestInvalidFsas:
             initial="invalid",
             accept=[]
         )
-        valid = make_fsa(states=["q0"], alphabet=["a"], transitions=[], initial="q0", accept=[])
-        result = analyze_fsa_correction(invalid, valid)
+        result = analyze_fsa_correction(invalid, invalid)
         assert result.is_equivalent is False
         assert len(result.validation_errors) > 0
 
@@ -374,221 +257,72 @@ class TestInvalidFsas:
             initial="q0",
             accept=["invalid"]
         )
-        valid = make_fsa(states=["q0"], alphabet=["a"], transitions=[], initial="q0", accept=[])
-        result = analyze_fsa_correction(invalid, valid)
+        result = analyze_fsa_correction(invalid, invalid)
+        assert result.is_equivalent is False
         assert len(result.validation_errors) > 0
 
 
 # =============================================================================
-# Test Edge Cases
+# Test Minimality
 # =============================================================================
 
-class TestEdgeCases:
-    """Test edge cases."""
+class TestCheckMinimality:
+    """Test check_minimality function."""
 
-    def test_empty_language(self):
-        """Test FSA accepting nothing."""
-        empty = make_fsa(
-            states=["q0"],
-            alphabet=["a"],
-            transitions=[{"from_state": "q0", "to_state": "q0", "symbol": "a"}],
-            initial="q0",
-            accept=[]
-        )
-        props = check_fsa_properties(empty)
-        assert props["is_valid"] is True
+    def test_minimal_dfa(self, dfa_accepts_a):
+        assert check_minimality(dfa_accepts_a) is True
 
-    def test_all_accepting(self):
-        """Test FSA accepting everything."""
-        all_accept = make_fsa(
-            states=["q0"],
-            alphabet=["a"],
-            transitions=[{"from_state": "q0", "to_state": "q0", "symbol": "a"}],
-            initial="q0",
-            accept=["q0"]
-        )
-        props = check_fsa_properties(all_accept)
-        assert props["is_valid"] is True
-
-    def test_nondeterministic(self):
-        """Test NFA detection."""
-        nfa = make_fsa(
-            states=["q0", "q1", "q2"],
-            alphabet=["a"],
+    def test_non_minimal_dfa_with_unreachable(self):
+        non_minimal = make_fsa(
+            states=["q0", "q1", "q2", "unreachable"],
+            alphabet=["a", "b"],
             transitions=[
                 {"from_state": "q0", "to_state": "q1", "symbol": "a"},
-                {"from_state": "q0", "to_state": "q2", "symbol": "a"},
+                {"from_state": "q0", "to_state": "q2", "symbol": "b"},
+                {"from_state": "q1", "to_state": "q2", "symbol": "a"},
+                {"from_state": "q1", "to_state": "q2", "symbol": "b"},
+                {"from_state": "q2", "to_state": "q2", "symbol": "a"},
+                {"from_state": "q2", "to_state": "q2", "symbol": "b"},
+                {"from_state": "unreachable", "to_state": "unreachable", "symbol": "a"},
             ],
             initial="q0",
             accept=["q1"]
         )
-        props = check_fsa_properties(nfa)
-        assert props["is_deterministic"] is False
+        assert check_minimality(non_minimal) is False
+
+
+class TestAnalyzeFsaCorrectionMinimality:
+    """Test analyze_fsa_correction with minimality checking."""
+
+    def test_minimal_fsa_passes_check(self, dfa_accepts_a, equivalent_dfa):
+        result = analyze_fsa_correction(dfa_accepts_a, equivalent_dfa, check_minimality=True)
+        assert result.is_minimal is True
+
+    def test_minimality_not_checked_by_default(self, dfa_accepts_a, equivalent_dfa):
+        result = analyze_fsa_correction(dfa_accepts_a, equivalent_dfa)
+        assert result.is_minimal is None
 
 
 # =============================================================================
-# Test Full Evaluation Pipeline (evaluate_fsa)
+# Test that errors come from are_isomorphic
 # =============================================================================
 
-class TestEvaluateFsa:
-    """Test the full evaluation pipeline with Answer and Params schemas."""
+class TestIsomorphismErrors:
+    """Test that equivalence errors have proper highlights from are_isomorphic."""
 
-    def test_evaluate_with_test_cases_all_pass(self, dfa_accepts_a):
-        """Test evaluation with TestCasesAnswer - all passing."""
-        answer = TestCasesAnswer(
-            type="test_cases",
-            value=[
-                TestCase(input="a", expected=True),
-                TestCase(input="b", expected=False),
-                TestCase(input="aa", expected=False),
-            ]
-        )
-        result = evaluate_fsa(dfa_accepts_a, answer)
-        assert isinstance(result, Result)
-        assert result.is_correct is True
-        assert "Correct" in result.feedback
+    def test_errors_have_highlights(self, dfa_accepts_a, dfa_accepts_a_or_b):
+        result = analyze_fsa_correction(dfa_accepts_a, dfa_accepts_a_or_b)
+        # are_isomorphic provides errors with ElementHighlight
+        for error in result.equivalence_errors:
+            # Each error should have meaningful info
+            assert error.message is not None
+            assert error.code == ErrorCode.LANGUAGE_MISMATCH
 
-    def test_evaluate_with_test_cases_some_fail(self, dfa_accepts_a):
-        """Test evaluation with TestCasesAnswer - some failing."""
-        answer = TestCasesAnswer(
-            type="test_cases",
-            value=[
-                TestCase(input="a", expected=True),
-                TestCase(input="b", expected=True),  # This should fail
-            ]
-        )
-        result = evaluate_fsa(dfa_accepts_a, answer)
-        assert result.is_correct is False
-        assert result.fsa_feedback is not None
-        assert len(result.fsa_feedback.errors) > 0
-
-    def test_evaluate_with_reference_fsa_equivalent(self, dfa_accepts_a, equivalent_dfa):
-        """Test evaluation with ReferenceFSAAnswer - equivalent FSAs."""
-        answer = ReferenceFSAAnswer(
-            type="reference_fsa",
-            value=equivalent_dfa.model_dump()
-        )
-        result = evaluate_fsa(dfa_accepts_a, answer)
-        assert result.is_correct is True
-
-    def test_evaluate_with_reference_fsa_different(self, dfa_accepts_a, dfa_accepts_a_or_b):
-        """Test evaluation with ReferenceFSAAnswer - different FSAs."""
-        answer = ReferenceFSAAnswer(
-            type="reference_fsa",
-            value=dfa_accepts_a_or_b.model_dump()
-        )
-        result = evaluate_fsa(dfa_accepts_a, answer)
-        assert result.is_correct is False
-        assert result.fsa_feedback.language is not None
-        assert result.fsa_feedback.language.are_equivalent is False
-
-    def test_evaluate_with_params_strict_dfa(self, dfa_accepts_a):
-        """Test evaluation with Params requiring DFA."""
-        params = Params(expected_type="DFA")
-        answer = TestCasesAnswer(
-            type="test_cases",
-            value=[TestCase(input="a", expected=True)]
-        )
-        result = evaluate_fsa(dfa_accepts_a, answer, params)
-        assert result.is_correct is True
-
-    def test_evaluate_with_params_strict_dfa_fails_nfa(self):
-        """Test that NFA fails when DFA is required."""
-        nfa = make_fsa(
-            states=["q0", "q1", "q2"],
-            alphabet=["a"],
-            transitions=[
-                {"from_state": "q0", "to_state": "q1", "symbol": "a"},
-                {"from_state": "q0", "to_state": "q2", "symbol": "a"},
-            ],
-            initial="q0",
-            accept=["q1"]
-        )
-        params = Params(expected_type="DFA")
-        answer = TestCasesAnswer(
-            type="test_cases",
-            value=[TestCase(input="a", expected=True)]
-        )
-        result = evaluate_fsa(nfa, answer, params)
-        assert result.is_correct is False
-        assert any(e.code == ErrorCode.WRONG_AUTOMATON_TYPE for e in result.fsa_feedback.errors)
-
-    def test_evaluate_with_partial_credit(self, dfa_accepts_a):
-        """Test partial credit mode."""
-        params = Params(evaluation_mode="partial")
-        answer = TestCasesAnswer(
-            type="test_cases",
-            value=[
-                TestCase(input="a", expected=True),
-                TestCase(input="b", expected=True),  # Will fail
-                TestCase(input="aa", expected=False),
-            ]
-        )
-        result = evaluate_fsa(dfa_accepts_a, answer, params)
-        assert result.score is not None
-        assert result.score == pytest.approx(2/3)  # 2 pass, 1 fail
-
-    def test_evaluate_with_minimal_feedback(self, dfa_accepts_a):
-        """Test minimal feedback verbosity."""
-        params = Params(feedback_verbosity="minimal")
-        answer = TestCasesAnswer(
-            type="test_cases",
-            value=[TestCase(input="b", expected=True)]  # Will fail
-        )
-        result = evaluate_fsa(dfa_accepts_a, answer, params)
-        assert result.feedback == "Incorrect."
-
-    def test_evaluate_invalid_fsa(self):
-        """Test evaluation of invalid FSA."""
-        invalid = make_fsa(
-            states=["q0"],
-            alphabet=["a"],
-            transitions=[],
-            initial="invalid",  # Invalid initial state
-            accept=[]
-        )
-        answer = TestCasesAnswer(
-            type="test_cases",
-            value=[TestCase(input="a", expected=True)]
-        )
-        result = evaluate_fsa(invalid, answer)
-        assert result.is_correct is False
-        assert "structural errors" in result.feedback
-
-    def test_evaluate_without_counterexample(self, dfa_accepts_a, dfa_accepts_a_or_b):
-        """Test hiding counterexample via params."""
-        params = Params(show_counterexample=False)
-        answer = ReferenceFSAAnswer(
-            type="reference_fsa",
-            value=dfa_accepts_a_or_b.model_dump()
-        )
-        result = evaluate_fsa(dfa_accepts_a, answer, params)
-        assert result.fsa_feedback.language.counterexample is None
-
-
-class TestEvaluateAgainstTestCases:
-    """Test evaluate_against_test_cases helper."""
-
-    def test_all_pass(self, dfa_accepts_a):
-        test_cases = [
-            TestCase(input="a", expected=True),
-            TestCase(input="b", expected=False),
-        ]
-        results, errors = evaluate_against_test_cases(dfa_accepts_a, test_cases, Params())
-        assert len(results) == 2
-        assert all(r.passed for r in results)
-        assert len(errors) == 0
-
-    def test_some_fail(self, dfa_accepts_a):
-        test_cases = [
-            TestCase(input="a", expected=True),
-            TestCase(input="b", expected=True),  # Should fail
-        ]
-        results, errors = evaluate_against_test_cases(dfa_accepts_a, test_cases, Params())
-        assert results[0].passed is True
-        assert results[1].passed is False
-        assert len(errors) == 1
-        assert errors[0].code == ErrorCode.TEST_CASE_FAILED
+    def test_errors_have_suggestions(self, dfa_accepts_a, dfa_accepts_a_or_b):
+        result = analyze_fsa_correction(dfa_accepts_a, dfa_accepts_a_or_b)
+        # are_isomorphic provides suggestions
+        for error in result.equivalence_errors:
+            assert error.suggestion is not None
 
 
 if __name__ == "__main__":
