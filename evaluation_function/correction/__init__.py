@@ -30,10 +30,6 @@ from .correction import (
     check_minimality,
     quick_equivalence_check,
     
-    # Helper functions
-    trace_string,
-    fsa_accepts,
-    
     # Result class
     CorrectionResult,
 )
@@ -45,7 +41,5 @@ __all__ = [
     "check_fsa_properties",
     "check_minimality",
     "quick_equivalence_check",
-    "trace_string",
-    "fsa_accepts",
     "CorrectionResult",
 ]

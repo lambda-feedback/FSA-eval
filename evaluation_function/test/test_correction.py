@@ -11,8 +11,6 @@ from evaluation_function.schemas.utils import make_fsa
 from evaluation_function.schemas.result import FSAFeedback, LanguageComparison
 from evaluation_function.correction import (
     CorrectionResult,
-    trace_string,
-    fsa_accepts,
     analyze_fsa_correction,
     get_correction_feedback,
     get_fsa_feedback,
@@ -126,34 +124,6 @@ class TestCorrectionResult:
         feedback = result.to_fsa_feedback()
         assert isinstance(feedback, FSAFeedback)
         assert feedback.summary == "Test summary"
-
-
-# =============================================================================
-# Test Helper Functions
-# =============================================================================
-
-class TestHelperFunctions:
-    """Test helper functions."""
-
-    def test_trace_accepted(self, dfa_accepts_a):
-        accepted, trace = trace_string(dfa_accepts_a, "a")
-        assert accepted is True
-        assert trace == ["q0", "q1"]
-
-    def test_trace_rejected(self, dfa_accepts_a):
-        accepted, trace = trace_string(dfa_accepts_a, "b")
-        assert accepted is False
-        assert trace == ["q0", "q2"]
-
-    def test_fsa_accepts(self, dfa_accepts_a):
-        assert fsa_accepts(dfa_accepts_a, "a") is True
-        assert fsa_accepts(dfa_accepts_a, "b") is False
-        assert fsa_accepts(dfa_accepts_a, "aa") is False
-
-    def test_empty_string(self, dfa_accepts_a):
-        accepted, trace = trace_string(dfa_accepts_a, "")
-        assert accepted is False
-        assert trace == ["q0"]
 
 
 # =============================================================================

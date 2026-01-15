@@ -29,7 +29,6 @@ from ..validation.validation import (
     is_valid_fsa,
     is_deterministic,
     is_complete,
-    accepts_string,
     find_unreachable_states,
     find_dead_states,
     fsas_accept_same_language,
@@ -106,48 +105,6 @@ class CorrectionResult(BaseModel):
             test_results=[],
             hints=hints[:5]  # Limit hints
         )
-
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
-def trace_string(fsa: FSA, string: str) -> Tuple[bool, List[str]]:
-    """
-    Trace execution of a string through an FSA.
-    Returns (accepted, state_trace).
-    """
-    if is_valid_fsa(fsa):
-        return False, []
-    
-    current_state = fsa.initial_state
-    trace = [current_state]
-    
-    # Build transition map for DFA
-    trans_map = {}
-    for t in fsa.transitions:
-        key = (t.from_state, t.symbol)
-        if key not in trans_map:
-            trans_map[key] = t.to_state
-    
-    for symbol in string:
-        if symbol not in set(fsa.alphabet):
-            return False, trace
-        
-        next_state = trans_map.get((current_state, symbol))
-        if next_state is None:
-            return False, trace
-        
-        current_state = next_state
-        trace.append(current_state)
-    
-    accepted = current_state in fsa.accept_states
-    return accepted, trace
-
-
-def fsa_accepts(fsa: FSA, string: str) -> bool:
-    """Check if FSA accepts string using validation module."""
-    return len(accepts_string(fsa, string)) == 0
 
 
 # =============================================================================
