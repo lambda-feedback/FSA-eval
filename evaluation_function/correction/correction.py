@@ -6,14 +6,18 @@ Generates diagnostic information for comparing student FSA against expected lang
 - Identifies specific states/transitions causing errors
 
 Leverages validation functions from the validation module for structural analysis.
+Uses schema models from schemas module for consistent data structures.
 """
 
 from itertools import product
 from typing import List, Optional, Tuple, Dict, Set
 from collections import deque
 
+# Schema imports - using Pydantic models for data structures
 from ..schemas import FSA, ValidationError, ErrorCode, ElementHighlight
-from ..schemas.result import LanguageComparison, TestResult, StructuralInfo
+from ..schemas.result import LanguageComparison, TestResult, StructuralInfo, FSAFeedback
+
+# Validation imports - leveraging all available validation functions
 from ..validation.validation import (
     is_valid_fsa,
     is_deterministic,
@@ -250,6 +254,44 @@ class CorrectionResult:
             ))
         return results
 
+    def to_fsa_feedback(self) -> FSAFeedback:
+        """
+        Convert to FSAFeedback schema for structured output.
+        
+        This leverages the FSAFeedback schema from schemas.result module
+        to provide a standardized response format.
+        """
+        # Separate errors and warnings
+        all_errors = self.get_all_validation_errors()
+        errors = [e for e in all_errors if e.severity == "error"]
+        warnings = [e for e in all_errors if e.severity in ("warning", "info")]
+        
+        # Generate hints based on analysis
+        hints = []
+        if self.state_errors:
+            accepting_issues = [e for e in self.state_errors if "accepting" in e.error_type]
+            if accepting_issues:
+                hints.append("Check which states should be accepting based on the language definition")
+        if self.transition_errors:
+            missing = [e for e in self.transition_errors if e.error_type == "missing"]
+            if missing:
+                hints.append("Ensure all necessary transitions are defined for your FSA")
+        if self.structural_info:
+            if self.structural_info.unreachable_states:
+                hints.append("Consider removing unreachable states or adding transitions to reach them")
+            if self.structural_info.dead_states:
+                hints.append("Dead states can never lead to acceptance - add paths to accepting states")
+        
+        return FSAFeedback(
+            summary=self.summary,
+            errors=errors,
+            warnings=warnings,
+            structural=self.structural_info,
+            language=self.get_language_comparison(),
+            test_results=self.get_test_results(),
+            hints=hints
+        )
+
 
 def trace_string(fsa: FSA, string: str) -> Tuple[bool, List[str]]:
     """
@@ -288,9 +330,25 @@ def trace_string(fsa: FSA, string: str) -> Tuple[bool, List[str]]:
 
 
 def fsa_accepts(fsa: FSA, string: str) -> bool:
-    """Check if an FSA accepts a string. Returns True if accepted, False otherwise."""
+    """
+    Check if an FSA accepts a string.
+    
+    Leverages accepts_string from validation module.
+    Returns True if accepted, False otherwise.
+    """
     errors = accepts_string(fsa, string)
     return len(errors) == 0
+
+
+def _fsas_differ_on_string(student_fsa: FSA, expected_fsa: FSA, string: str) -> bool:
+    """
+    Check if two FSAs differ on a given string.
+    
+    Leverages fsas_accept_same_string from validation module.
+    Returns True if they differ, False if they agree.
+    """
+    errors = fsas_accept_same_string(student_fsa, expected_fsa, string)
+    return len(errors) > 0
 
 
 def generate_difference_strings(
@@ -323,11 +381,10 @@ def generate_difference_strings(
     # Use the union of alphabets for comprehensive testing
     alphabet = list(set(student_fsa.alphabet) | set(expected_fsa.alphabet))
     
-    # Test empty string first
-    student_accepts_empty = fsa_accepts(student_fsa, "")
-    expected_accepts_empty = fsa_accepts(expected_fsa, "")
-    
-    if student_accepts_empty != expected_accepts_empty:
+    # Test empty string first using fsas_accept_same_string
+    if _fsas_differ_on_string(student_fsa, expected_fsa, ""):
+        student_accepts_empty = fsa_accepts(student_fsa, "")
+        expected_accepts_empty = fsa_accepts(expected_fsa, "")
         student_trace = trace_string(student_fsa, "")[1]
         expected_trace = trace_string(expected_fsa, "")[1]
         differences.append(DifferenceString(
@@ -338,7 +395,7 @@ def generate_difference_strings(
             expected_trace=expected_trace
         ))
     
-    # Test strings of increasing length
+    # Test strings of increasing length using fsas_accept_same_string for efficiency
     for length in range(1, max_length + 1):
         if len(differences) >= max_differences:
             break
@@ -348,10 +405,12 @@ def generate_difference_strings(
                 break
             
             string = ''.join(symbols)
-            student_accepts = fsa_accepts(student_fsa, string)
-            expected_accepts = fsa_accepts(expected_fsa, string)
             
-            if student_accepts != expected_accepts:
+            # Use fsas_accept_same_string to check if FSAs differ on this string
+            if _fsas_differ_on_string(student_fsa, expected_fsa, string):
+                # Get acceptance status for detailed feedback
+                student_accepts = fsa_accepts(student_fsa, string)
+                expected_accepts = fsa_accepts(expected_fsa, string)
                 student_accepted, student_trace = trace_string(student_fsa, string)
                 expected_accepted, expected_trace = trace_string(expected_fsa, string)
                 
@@ -770,6 +829,40 @@ def check_fsa_properties(fsa: FSA) -> dict:
     result["structural_info"] = get_structured_info_of_fsa(fsa).model_dump()
     
     return result
+
+
+def get_fsa_feedback(
+    student_fsa: FSA,
+    expected_fsa: FSA,
+    max_length: int = 5,
+    max_differences: int = 10,
+    check_isomorphism: bool = True
+) -> FSAFeedback:
+    """
+    Get structured FSA feedback using the FSAFeedback schema.
+    
+    This is the recommended entry point for getting correction feedback
+    in a standardized format that's ready for UI consumption.
+    
+    Leverages:
+    - FSAFeedback schema from schemas.result
+    - All validation functions for comprehensive analysis
+    
+    Args:
+        student_fsa: The student's FSA
+        expected_fsa: The expected/reference FSA
+        max_length: Maximum length of test strings
+        max_differences: Maximum number of difference strings to generate
+        check_isomorphism: Whether to use minimization + isomorphism for equivalence
+    
+    Returns:
+        FSAFeedback: Structured feedback with errors, warnings, structural info,
+                     language comparison, test results, and hints
+    """
+    result = analyze_fsa_correction(
+        student_fsa, expected_fsa, max_length, max_differences, check_isomorphism
+    )
+    return result.to_fsa_feedback()
 
 
 def quick_equivalence_check(

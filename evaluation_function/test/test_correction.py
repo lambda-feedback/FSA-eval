@@ -21,9 +21,11 @@ from evaluation_function.correction.correction import (
     identify_transition_errors,
     analyze_fsa_correction,
     get_correction_feedback,
+    get_fsa_feedback,
     check_fsa_properties,
     quick_equivalence_check,
 )
+from evaluation_function.schemas.result import FSAFeedback, LanguageComparison, TestResult
 
 
 # =============================================================================
@@ -470,6 +472,110 @@ class TestGetCorrectionFeedback:
             simple_dfa_accepts_a, equivalent_dfa_different_names
         )
         assert feedback["is_equivalent"] is True
+
+
+# =============================================================================
+# Test get_fsa_feedback (returns FSAFeedback schema)
+# =============================================================================
+
+class TestGetFsaFeedback:
+    """Tests for get_fsa_feedback function that returns FSAFeedback schema."""
+
+    def test_returns_fsa_feedback(self, simple_dfa_accepts_a, simple_dfa_accepts_a_or_b):
+        """Test that get_fsa_feedback returns FSAFeedback object."""
+        feedback = get_fsa_feedback(simple_dfa_accepts_a, simple_dfa_accepts_a_or_b)
+        assert isinstance(feedback, FSAFeedback)
+
+    def test_fsa_feedback_has_summary(self, simple_dfa_accepts_a, simple_dfa_accepts_a_or_b):
+        """Test FSAFeedback has a summary."""
+        feedback = get_fsa_feedback(simple_dfa_accepts_a, simple_dfa_accepts_a_or_b)
+        assert feedback.summary != ""
+
+    def test_fsa_feedback_has_errors(self, simple_dfa_accepts_a, simple_dfa_accepts_a_or_b):
+        """Test FSAFeedback has errors for non-equivalent FSAs."""
+        feedback = get_fsa_feedback(simple_dfa_accepts_a, simple_dfa_accepts_a_or_b)
+        # Should have errors or test results showing differences
+        assert len(feedback.errors) > 0 or len(feedback.test_results) > 0
+
+    def test_fsa_feedback_has_language_comparison(self, simple_dfa_accepts_a, simple_dfa_accepts_a_or_b):
+        """Test FSAFeedback has language comparison."""
+        feedback = get_fsa_feedback(simple_dfa_accepts_a, simple_dfa_accepts_a_or_b)
+        assert feedback.language is not None
+        assert isinstance(feedback.language, LanguageComparison)
+        assert feedback.language.are_equivalent is False
+
+    def test_fsa_feedback_has_test_results(self, simple_dfa_accepts_a, simple_dfa_accepts_a_or_b):
+        """Test FSAFeedback has test results."""
+        feedback = get_fsa_feedback(simple_dfa_accepts_a, simple_dfa_accepts_a_or_b)
+        assert isinstance(feedback.test_results, list)
+        for tr in feedback.test_results:
+            assert isinstance(tr, TestResult)
+
+    def test_fsa_feedback_has_structural_info(self, dfa_with_unreachable_state, simple_dfa_accepts_a):
+        """Test FSAFeedback has structural info."""
+        feedback = get_fsa_feedback(dfa_with_unreachable_state, simple_dfa_accepts_a)
+        assert feedback.structural is not None
+        assert "unreachable" in feedback.structural.unreachable_states
+
+    def test_fsa_feedback_equivalent_fsas(self, simple_dfa_accepts_a, equivalent_dfa_different_names):
+        """Test FSAFeedback for equivalent FSAs."""
+        feedback = get_fsa_feedback(simple_dfa_accepts_a, equivalent_dfa_different_names)
+        assert feedback.language is not None
+        assert feedback.language.are_equivalent is True
+
+    def test_fsa_feedback_has_hints(self, dfa_with_dead_state, simple_dfa_accepts_a):
+        """Test FSAFeedback generates helpful hints."""
+        feedback = get_fsa_feedback(dfa_with_dead_state, simple_dfa_accepts_a)
+        # Should have hints about dead states
+        assert isinstance(feedback.hints, list)
+
+    def test_fsa_feedback_separates_errors_and_warnings(self, dfa_with_unreachable_state, simple_dfa_accepts_a):
+        """Test FSAFeedback separates errors from warnings."""
+        feedback = get_fsa_feedback(dfa_with_unreachable_state, simple_dfa_accepts_a)
+        # Errors should be severity="error", warnings should be severity="warning"
+        for error in feedback.errors:
+            assert error.severity == "error"
+        for warning in feedback.warnings:
+            assert warning.severity in ("warning", "info")
+
+
+# =============================================================================
+# Test CorrectionResult.to_fsa_feedback
+# =============================================================================
+
+class TestCorrectionResultToFsaFeedback:
+    """Tests for CorrectionResult.to_fsa_feedback method."""
+
+    def test_to_fsa_feedback_returns_fsa_feedback(self, simple_dfa_accepts_a, simple_dfa_accepts_a_or_b):
+        """Test to_fsa_feedback returns FSAFeedback."""
+        result = analyze_fsa_correction(simple_dfa_accepts_a, simple_dfa_accepts_a_or_b)
+        feedback = result.to_fsa_feedback()
+        assert isinstance(feedback, FSAFeedback)
+
+    def test_to_fsa_feedback_includes_all_fields(self, simple_dfa_accepts_a, simple_dfa_accepts_a_or_b):
+        """Test to_fsa_feedback includes all required fields."""
+        result = analyze_fsa_correction(simple_dfa_accepts_a, simple_dfa_accepts_a_or_b)
+        feedback = result.to_fsa_feedback()
+        
+        # Check all fields exist
+        assert hasattr(feedback, 'summary')
+        assert hasattr(feedback, 'errors')
+        assert hasattr(feedback, 'warnings')
+        assert hasattr(feedback, 'structural')
+        assert hasattr(feedback, 'language')
+        assert hasattr(feedback, 'test_results')
+        assert hasattr(feedback, 'hints')
+
+    def test_to_fsa_feedback_model_dump(self, simple_dfa_accepts_a, simple_dfa_accepts_a_or_b):
+        """Test to_fsa_feedback result can be serialized with model_dump."""
+        result = analyze_fsa_correction(simple_dfa_accepts_a, simple_dfa_accepts_a_or_b)
+        feedback = result.to_fsa_feedback()
+        
+        # Should be serializable
+        dumped = feedback.model_dump()
+        assert isinstance(dumped, dict)
+        assert "summary" in dumped
+        assert "errors" in dumped
 
 
 # =============================================================================

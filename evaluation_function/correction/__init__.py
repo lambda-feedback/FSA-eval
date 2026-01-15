@@ -8,6 +8,7 @@ Provides diagnostic information for comparing student FSAs against expected lang
 Main Functions:
 - analyze_fsa_correction: Full pipeline for FSA comparison and error identification
 - get_correction_feedback: Convenience function returning dict results
+- get_fsa_feedback: Returns FSAFeedback schema (recommended for UI integration)
 - check_fsa_properties: Get structural properties of a single FSA
 - quick_equivalence_check: Fast check if two FSAs are equivalent
 """
@@ -16,6 +17,7 @@ from .correction import (
     # Main pipeline functions
     analyze_fsa_correction,
     get_correction_feedback,
+    get_fsa_feedback,
     check_fsa_properties,
     quick_equivalence_check,
     
@@ -37,6 +39,7 @@ __all__ = [
     # Main pipeline
     "analyze_fsa_correction",
     "get_correction_feedback",
+    "get_fsa_feedback",
     "check_fsa_properties",
     "quick_equivalence_check",
     

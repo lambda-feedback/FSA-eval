@@ -47,19 +47,42 @@ feedback = get_correction_feedback(student_fsa, expected_fsa)
 # transition_errors, state_errors, validation_errors, etc.
 ```
 
+#### `get_fsa_feedback(student_fsa, expected_fsa, ...) -> FSAFeedback`
+
+**Recommended entry point** - Returns structured feedback using the `FSAFeedback` schema from `schemas.result`. This is the best choice for UI integration.
+
+```python
+from evaluation_function.correction.correction import get_fsa_feedback
+
+feedback = get_fsa_feedback(student_fsa, expected_fsa)
+# Returns FSAFeedback with:
+# - summary: str
+# - errors: List[ValidationError] (severity="error")
+# - warnings: List[ValidationError] (severity="warning"/"info")
+# - structural: StructuralInfo
+# - language: LanguageComparison
+# - test_results: List[TestResult]
+# - hints: List[str]
+
+# Easy serialization
+json_data = feedback.model_dump()
+```
+
 ### Utility Functions
 
 #### `generate_difference_strings(student_fsa, expected_fsa, max_length=5, max_differences=10) -> List[DifferenceString]`
 
-Generates strings that demonstrate differences between two FSAs by enumerating strings up to `max_length` and finding those accepted by one FSA but not the other.
+Generates strings that demonstrate differences between two FSAs.
+
+Internally uses `fsas_accept_same_string` from validation module to efficiently check if FSAs differ on each string.
 
 #### `identify_state_errors(student_fsa, expected_fsa, difference_strings) -> List[StateError]`
 
 Analyzes difference strings to identify state-level errors:
 - States that should be accepting but aren't
 - States that shouldn't be accepting but are
-- Unreachable states
-- Dead states
+- Unreachable states (via `find_unreachable_states`)
+- Dead states (via `find_dead_states`)
 
 #### `identify_transition_errors(student_fsa, expected_fsa, difference_strings) -> List[TransitionError]`
 
@@ -76,10 +99,11 @@ Gets detailed property analysis of a single FSA, leveraging:
 - `is_complete`: completeness check
 - `find_unreachable_states`: reachability analysis
 - `find_dead_states`: dead state analysis
+- `get_structured_info_of_fsa`: combined structural info
 
 #### `quick_equivalence_check(student_fsa, expected_fsa) -> Tuple[bool, Optional[str], Optional[str]]`
 
-Quick check if two FSAs accept the same language. Returns `(are_equivalent, counterexample, counterexample_type)`.
+Quick check if two FSAs accept the same language using `fsas_accept_same_language` from validation. Returns `(are_equivalent, counterexample, counterexample_type)`.
 
 #### `trace_string(fsa, string) -> Tuple[bool, List[str]]`
 
@@ -87,7 +111,7 @@ Traces execution of a string through an FSA, returning `(accepted, state_trace)`
 
 #### `fsa_accepts(fsa, string) -> bool`
 
-Checks if an FSA accepts a string.
+Checks if an FSA accepts a string. Leverages `accepts_string` from validation module.
 
 ## Data Classes
 
