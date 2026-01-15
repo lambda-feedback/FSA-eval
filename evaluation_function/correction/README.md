@@ -4,7 +4,7 @@ Compares student FSAs against expected FSAs, leveraging the validation module fo
 
 ## Architecture
 
-The correction module is a thin wrapper around the validation module. All detailed "why" feedback comes from `are_isomorphic()` in `validation.py`.
+The correction module is a wrapper around the validation module. All detailed "why" feedback comes from `are_isomorphic()` in `validation.py`.
 
 ## Pipeline (4 Steps)
 
@@ -39,20 +39,6 @@ The correction module is a thin wrapper around the validation module. All detail
 │  └── structural_info: StructuralInfo                            │
 └─────────────────────────────────────────────────────────────────┘
 ```
-
-## Why No Separate Feedback Functions?
-
-The validation module's `are_isomorphic()` already provides detailed feedback:
-
-| What `are_isomorphic()` returns | Example |
-|--------------------------------|---------|
-| **Alphabet mismatch** | "Your alphabet: {a}. Expected: {a, b}" |
-| **State count mismatch** | "expected 3 states, but found 4" |
-| **Wrong acceptance** | "State 'q1' should be accepting" with `ElementHighlight` |
-| **Missing transition** | "Missing transition from 'q1' on 'a'" with `ElementHighlight` |
-| **Wrong destination** | "Transition from 'q1' on 'a' leads to wrong state" with `ElementHighlight` |
-
-Each error includes an `ElementHighlight` for UI rendering.
 
 ## Usage
 
