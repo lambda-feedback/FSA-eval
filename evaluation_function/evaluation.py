@@ -1,34 +1,46 @@
 from typing import Any
-from lf_toolkit.evaluation import Result, Params
+from lf_toolkit.evaluation import Result as LFResult, Params
+
+from .schemas import FSA
+from .schemas.result import Result
+from .correction import analyze_fsa_correction
+
 
 def evaluation_function(
     response: Any,
     answer: Any,
     params: Params,
-) -> Result:
+) -> LFResult:
     """
-    Function used to evaluate a student response.
-    ---
-    The handler function passes three arguments to evaluation_function():
-
-    - `response` which are the answers provided by the student.
-    - `answer` which are the correct answers to compare against.
-    - `params` which are any extra parameters that may be useful,
-        e.g., error tolerances.
-
-    The output of this function is what is returned as the API response
-    and therefore must be JSON-encodable. It must also conform to the
-    response schema.
-
-    Any standard python library may be used, as well as any package
-    available on pip (provided it is added to requirements.txt).
-
-    The way you wish to structure you code (all in this function, or
-    split into many) is entirely up to you. All that matters are the
-    return types and that evaluation_function() is the main function used
-    to output the evaluation response.
+    Evaluate a student's FSA response against the expected answer.
+    
+    Args:
+        response: Student's FSA (dict with states, alphabet, transitions, etc.)
+        answer: Expected FSA 
+        params: Extra parameters (e.g., require_minimal)
+    
+    Returns:
+        LFResult with is_correct and feedback
     """
-
-    return Result(
-        is_correct=response == answer
-    )
+    try:
+        # Parse FSAs from input
+        student_fsa = FSA.model_validate(response)
+        expected_fsa = FSA.model_validate(answer)
+        
+        # Get require_minimal from params if present
+        require_minimal = params.get("require_minimal", False) if hasattr(params, "get") else False
+        
+        # Run correction pipeline
+        result: Result = analyze_fsa_correction(student_fsa, expected_fsa, require_minimal)
+        
+        # Convert to lf_toolkit Result
+        return LFResult(
+            is_correct=result.is_correct,
+            feedback_items=[("feedback", result.feedback)]
+        )
+        
+    except Exception as e:
+        return LFResult(
+            is_correct=False,
+            feedback_items=[("error", f"Invalid FSA format: {str(e)}")]
+        )

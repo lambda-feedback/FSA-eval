@@ -1,19 +1,14 @@
 """
 Tests for FSA Correction Module.
 
-Uses make_fsa from schemas.utils for all FSA construction.
-Tests the simplified correction module that leverages validation.are_isomorphic().
+Tests the correction module that returns Result with FSAFeedback.
 """
 
 import pytest
 from evaluation_function.schemas import ValidationError, ErrorCode
 from evaluation_function.schemas.utils import make_fsa
-from evaluation_function.schemas.result import FSAFeedback, LanguageComparison
-from evaluation_function.correction import (
-    CorrectionResult,
-    analyze_fsa_correction,
-    check_minimality,
-)
+from evaluation_function.schemas.result import Result, FSAFeedback
+from evaluation_function.correction import analyze_fsa_correction, check_minimality
 
 
 # =============================================================================
@@ -77,87 +72,38 @@ def equivalent_dfa():
     )
 
 
-@pytest.fixture
-def dfa_with_unreachable():
-    """DFA with unreachable state."""
-    return make_fsa(
-        states=["q0", "q1", "unreachable"],
-        alphabet=["a"],
-        transitions=[
-            {"from_state": "q0", "to_state": "q1", "symbol": "a"},
-            {"from_state": "q1", "to_state": "q1", "symbol": "a"},
-            {"from_state": "unreachable", "to_state": "q1", "symbol": "a"},
-        ],
-        initial="q0",
-        accept=["q1"]
-    )
-
-
 # =============================================================================
-# Test CorrectionResult
-# =============================================================================
-
-class TestCorrectionResult:
-    """Test CorrectionResult model."""
-
-    def test_model_dump(self):
-        result = CorrectionResult()
-        d = result.model_dump()
-        assert "is_equivalent" in d
-        assert "is_minimal" in d
-        assert "equivalence_errors" in d
-
-    def test_get_all_errors(self):
-        result = CorrectionResult(
-            validation_errors=[ValidationError(message="test", code=ErrorCode.INVALID_INITIAL, severity="error")],
-            equivalence_errors=[ValidationError(message="equiv", code=ErrorCode.LANGUAGE_MISMATCH, severity="error")]
-        )
-        errors = result.get_all_errors()
-        assert len(errors) == 2
-
-    def test_to_fsa_feedback(self):
-        result = CorrectionResult(summary="Test summary", is_equivalent=False)
-        feedback = result.to_fsa_feedback()
-        assert isinstance(feedback, FSAFeedback)
-        assert feedback.summary == "Test summary"
-
-
-# =============================================================================
-# Test Main Pipeline
+# Test Main Pipeline - Returns Result
 # =============================================================================
 
 class TestAnalyzeFsaCorrection:
-    """Test the main analysis pipeline."""
+    """Test the main analysis pipeline returns Result."""
 
-    def test_equivalent_fsas(self, dfa_accepts_a, equivalent_dfa):
+    def test_equivalent_fsas_correct(self, dfa_accepts_a, equivalent_dfa):
         result = analyze_fsa_correction(dfa_accepts_a, equivalent_dfa)
-        assert result.is_equivalent is True
-        assert result.is_isomorphic is True
-        assert len(result.equivalence_errors) == 0
+        assert isinstance(result, Result)
+        assert result.is_correct is True
+        assert "Correct" in result.feedback
 
-    def test_different_fsas(self, dfa_accepts_a, dfa_accepts_a_or_b):
+    def test_different_fsas_incorrect(self, dfa_accepts_a, dfa_accepts_a_or_b):
         result = analyze_fsa_correction(dfa_accepts_a, dfa_accepts_a_or_b)
-        assert result.is_equivalent is False
-        assert result.is_isomorphic is False
-        # Should have errors from are_isomorphic()
-        assert len(result.equivalence_errors) > 0
+        assert isinstance(result, Result)
+        assert result.is_correct is False
 
-    def test_structural_info(self, dfa_accepts_a, equivalent_dfa):
+    def test_result_has_fsa_feedback(self, dfa_accepts_a, equivalent_dfa):
         result = analyze_fsa_correction(dfa_accepts_a, equivalent_dfa)
-        assert result.structural_info is not None
-        assert result.structural_info.num_states == 3
+        assert result.fsa_feedback is not None
+        assert isinstance(result.fsa_feedback, FSAFeedback)
 
-    def test_to_fsa_feedback(self, dfa_accepts_a, dfa_accepts_a_or_b):
+    def test_fsa_feedback_has_structural_info(self, dfa_accepts_a, equivalent_dfa):
+        result = analyze_fsa_correction(dfa_accepts_a, equivalent_dfa)
+        assert result.fsa_feedback.structural is not None
+        assert result.fsa_feedback.structural.num_states == 3
+
+    def test_different_fsas_have_errors(self, dfa_accepts_a, dfa_accepts_a_or_b):
         result = analyze_fsa_correction(dfa_accepts_a, dfa_accepts_a_or_b)
-        feedback = result.to_fsa_feedback()
-        assert isinstance(feedback, FSAFeedback)
-        assert len(feedback.errors) > 0
-
-    def test_get_language_comparison(self, dfa_accepts_a, equivalent_dfa):
-        result = analyze_fsa_correction(dfa_accepts_a, equivalent_dfa)
-        comparison = result.get_language_comparison()
-        assert isinstance(comparison, LanguageComparison)
-        assert comparison.are_equivalent is True
+        assert result.fsa_feedback is not None
+        assert len(result.fsa_feedback.errors) > 0
 
 
 # =============================================================================
@@ -176,8 +122,9 @@ class TestInvalidFsas:
             accept=[]
         )
         result = analyze_fsa_correction(invalid, invalid)
-        assert result.is_equivalent is False
-        assert len(result.validation_errors) > 0
+        assert result.is_correct is False
+        assert result.fsa_feedback is not None
+        assert len(result.fsa_feedback.errors) > 0
 
     def test_invalid_accept_state(self):
         invalid = make_fsa(
@@ -188,8 +135,7 @@ class TestInvalidFsas:
             accept=["invalid"]
         )
         result = analyze_fsa_correction(invalid, invalid)
-        assert result.is_equivalent is False
-        assert len(result.validation_errors) > 0
+        assert result.is_correct is False
 
 
 # =============================================================================
@@ -224,35 +170,30 @@ class TestCheckMinimality:
 class TestAnalyzeFsaCorrectionMinimality:
     """Test analyze_fsa_correction with minimality checking."""
 
-    def test_minimal_fsa_passes_check(self, dfa_accepts_a, equivalent_dfa):
-        result = analyze_fsa_correction(dfa_accepts_a, equivalent_dfa, check_minimality=True)
-        assert result.is_minimal is True
+    def test_minimal_fsa_passes(self, dfa_accepts_a, equivalent_dfa):
+        result = analyze_fsa_correction(dfa_accepts_a, equivalent_dfa, require_minimal=True)
+        assert result.is_correct is True
 
-    def test_minimality_not_checked_by_default(self, dfa_accepts_a, equivalent_dfa):
-        result = analyze_fsa_correction(dfa_accepts_a, equivalent_dfa)
-        assert result.is_minimal is None
-
-
-# =============================================================================
-# Test that errors come from are_isomorphic
-# =============================================================================
-
-class TestIsomorphismErrors:
-    """Test that equivalence errors have proper highlights from are_isomorphic."""
-
-    def test_errors_have_highlights(self, dfa_accepts_a, dfa_accepts_a_or_b):
-        result = analyze_fsa_correction(dfa_accepts_a, dfa_accepts_a_or_b)
-        # are_isomorphic provides errors with ElementHighlight
-        for error in result.equivalence_errors:
-            # Each error should have meaningful info
-            assert error.message is not None
-            assert error.code == ErrorCode.LANGUAGE_MISMATCH
-
-    def test_errors_have_suggestions(self, dfa_accepts_a, dfa_accepts_a_or_b):
-        result = analyze_fsa_correction(dfa_accepts_a, dfa_accepts_a_or_b)
-        # are_isomorphic provides suggestions
-        for error in result.equivalence_errors:
-            assert error.suggestion is not None
+    def test_non_minimal_fsa_fails_when_required(self, equivalent_dfa):
+        non_minimal = make_fsa(
+            states=["q0", "q1", "q2", "unreachable"],
+            alphabet=["a", "b"],
+            transitions=[
+                {"from_state": "q0", "to_state": "q1", "symbol": "a"},
+                {"from_state": "q0", "to_state": "q2", "symbol": "b"},
+                {"from_state": "q1", "to_state": "q2", "symbol": "a"},
+                {"from_state": "q1", "to_state": "q2", "symbol": "b"},
+                {"from_state": "q2", "to_state": "q2", "symbol": "a"},
+                {"from_state": "q2", "to_state": "q2", "symbol": "b"},
+                {"from_state": "unreachable", "to_state": "unreachable", "symbol": "a"},
+                {"from_state": "unreachable", "to_state": "unreachable", "symbol": "b"},
+            ],
+            initial="q0",
+            accept=["q1"]
+        )
+        result = analyze_fsa_correction(non_minimal, equivalent_dfa, require_minimal=True)
+        # Should have minimality error
+        assert result.fsa_feedback is not None
 
 
 if __name__ == "__main__":

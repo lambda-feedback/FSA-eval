@@ -1,70 +1,44 @@
 # FSA Correction Module
 
-Compares student FSAs against expected FSAs, leveraging the validation module for detailed feedback.
+Compares student FSAs against expected FSAs, returns `Result` with `FSAFeedback`.
 
 ## Exports
 
 ```python
 from evaluation_function.correction import (
-    analyze_fsa_correction,  # Main pipeline
+    analyze_fsa_correction,  # Main pipeline -> Result
     check_minimality,        # Check if FSA is minimal
-    CorrectionResult,        # Result model
 )
 ```
 
 ## Pipeline
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                   analyze_fsa_correction()                       │
-│                 (student_fsa, expected_fsa)                      │
-├─────────────────────────────────────────────────────────────────┤
-│  Step 1: Structural Validation                                   │
-│  └── is_valid_fsa() → List[ValidationError]                     │
-├─────────────────────────────────────────────────────────────────┤
-│  Step 2: Minimality Check (optional)                             │
-│  └── check_minimality() → bool                                   │
-├─────────────────────────────────────────────────────────────────┤
-│  Step 3: Structural Analysis                                     │
-│  └── get_structured_info_of_fsa() → StructuralInfo              │
-├─────────────────────────────────────────────────────────────────┤
-│  Step 4: Language Equivalence                                    │
-│  └── fsas_accept_same_language() → are_isomorphic()             │
-│      Provides detailed feedback with ElementHighlight            │
-├─────────────────────────────────────────────────────────────────┤
-│  OUTPUT: CorrectionResult                                        │
-│  ├── is_equivalent: bool                                         │
-│  ├── is_isomorphic: bool                                         │
-│  ├── is_minimal: Optional[bool]                                  │
-│  ├── validation_errors: List[ValidationError]                   │
-│  ├── equivalence_errors: List[ValidationError]                  │
-│  └── structural_info: StructuralInfo                            │
-│                                                                  │
-│  Methods:                                                        │
-│  ├── .model_dump() → dict                                       │
-│  ├── .to_fsa_feedback() → FSAFeedback                           │
-│  └── .get_language_comparison() → LanguageComparison            │
-└─────────────────────────────────────────────────────────────────┘
+analyze_fsa_correction(student_fsa, expected_fsa, require_minimal=False) -> Result
+├── 1. Validate student FSA (is_valid_fsa)
+├── 2. Check minimality (if required)
+├── 3. Structural analysis (get_structured_info_of_fsa)
+└── 4. Language equivalence (fsas_accept_same_language -> are_isomorphic)
+         └── All "why" feedback comes from here
+```
+
+## Result
+
+```python
+Result(
+    is_correct: bool,         # True if FSAs accept same language
+    feedback: str,            # Human-readable summary
+    fsa_feedback: FSAFeedback # Structured feedback for UI
+)
 ```
 
 ## Usage
 
 ```python
-from evaluation_function.correction import analyze_fsa_correction, check_minimality
+from evaluation_function.correction import analyze_fsa_correction
 
-# Compare two FSAs
-result = analyze_fsa_correction(student_fsa, expected_fsa, check_minimality=True)
-
-# Check result
-result.is_equivalent      # bool
-result.equivalence_errors # List[ValidationError] with ElementHighlight
-
-# For UI
-result.to_fsa_feedback()  # FSAFeedback schema
-
-# As dict
-result.model_dump()       # dict
-
-# Check minimality only
-check_minimality(fsa)     # bool
+result = analyze_fsa_correction(student_fsa, expected_fsa)
+result.is_correct           # bool
+result.feedback             # "Correct!" or "Languages differ: ..."
+result.fsa_feedback.errors  # List[ValidationError] with ElementHighlight
 ```
