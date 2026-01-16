@@ -24,13 +24,9 @@ from pydantic import BaseModel, Field
 from ..schemas import FSA, ValidationError, ErrorCode
 from ..schemas.result import LanguageComparison, StructuralInfo, FSAFeedback
 
-# Validation imports - these provide all the functionality we need
+# Validation imports
 from ..validation.validation import (
     is_valid_fsa,
-    is_deterministic,
-    is_complete,
-    find_unreachable_states,
-    find_dead_states,
     fsas_accept_same_language,
     get_structured_info_of_fsa,
 )
@@ -221,104 +217,3 @@ def analyze_fsa_correction(
     
     result.summary = f"Languages differ: {', '.join(error_types) if error_types else f'{len(equiv_errors)} issue(s)'}"
     return result
-
-
-# =============================================================================
-# Convenience Functions
-# =============================================================================
-
-def get_correction_feedback(
-    student_fsa: FSA,
-    expected_fsa: FSA,
-    check_minimality: bool = False
-) -> dict:
-    """Returns correction analysis as dict."""
-    result = analyze_fsa_correction(student_fsa, expected_fsa, check_minimality)
-    return result.model_dump()
-
-
-def get_fsa_feedback(
-    student_fsa: FSA,
-    expected_fsa: FSA,
-    check_minimality: bool = False
-) -> FSAFeedback:
-    """Returns structured FSAFeedback schema (recommended for UI)."""
-    result = analyze_fsa_correction(student_fsa, expected_fsa, check_minimality)
-    return result.to_fsa_feedback()
-
-
-def check_fsa_properties(fsa: FSA) -> dict:
-    """Get FSA properties using validation functions."""
-    result = {
-        "is_valid": True,
-        "is_deterministic": True,
-        "is_complete": True,
-        "is_minimal": True,
-        "validation_errors": [],
-        "determinism_errors": [],
-        "completeness_errors": [],
-        "unreachable_states": [],
-        "dead_states": [],
-        "structural_info": None
-    }
-    
-    validation_errors = is_valid_fsa(fsa)
-    if validation_errors:
-        result["is_valid"] = False
-        result["validation_errors"] = [e.model_dump() for e in validation_errors]
-        return result
-    
-    det_errors = is_deterministic(fsa)
-    result["is_deterministic"] = len(det_errors) == 0
-    result["determinism_errors"] = [e.model_dump() for e in det_errors]
-    
-    if result["is_deterministic"]:
-        comp_errors = is_complete(fsa)
-        result["is_complete"] = len(comp_errors) == 0
-        result["completeness_errors"] = [e.model_dump() for e in comp_errors]
-        result["is_minimal"] = check_minimality(fsa)
-    else:
-        result["is_complete"] = False
-        result["is_minimal"] = False
-    
-    result["unreachable_states"] = [
-        e.highlight.state_id for e in find_unreachable_states(fsa)
-        if e.highlight and e.highlight.state_id
-    ]
-    result["dead_states"] = [
-        e.highlight.state_id for e in find_dead_states(fsa)
-        if e.highlight and e.highlight.state_id
-    ]
-    result["structural_info"] = get_structured_info_of_fsa(fsa).model_dump()
-    
-    return result
-
-
-def quick_equivalence_check(
-    student_fsa: FSA,
-    expected_fsa: FSA
-) -> Tuple[bool, Optional[str], Optional[str]]:
-    """
-    Quick equivalence check.
-    
-    Returns:
-        (are_equivalent, counterexample_hint, hint_type)
-    """
-    if is_valid_fsa(student_fsa) or is_valid_fsa(expected_fsa):
-        return False, None, None
-    
-    equiv_errors = fsas_accept_same_language(student_fsa, expected_fsa)
-    if not equiv_errors:
-        return True, None, None
-    
-    # Extract hint from first error
-    first_error = equiv_errors[0]
-    hint = first_error.message
-    hint_type = None
-    
-    if "accepting" in hint.lower():
-        hint_type = "acceptance_error"
-    elif "transition" in hint.lower():
-        hint_type = "transition_error"
-    
-    return False, hint, hint_type

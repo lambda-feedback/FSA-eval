@@ -12,11 +12,7 @@ from evaluation_function.schemas.result import FSAFeedback, LanguageComparison
 from evaluation_function.correction import (
     CorrectionResult,
     analyze_fsa_correction,
-    get_correction_feedback,
-    get_fsa_feedback,
-    check_fsa_properties,
     check_minimality,
-    quick_equivalence_check,
 )
 
 
@@ -162,42 +158,6 @@ class TestAnalyzeFsaCorrection:
         comparison = result.get_language_comparison()
         assert isinstance(comparison, LanguageComparison)
         assert comparison.are_equivalent is True
-
-
-# =============================================================================
-# Test Convenience Functions
-# =============================================================================
-
-class TestConvenienceFunctions:
-    """Test convenience functions."""
-
-    def test_get_correction_feedback(self, dfa_accepts_a, equivalent_dfa):
-        feedback = get_correction_feedback(dfa_accepts_a, equivalent_dfa)
-        assert isinstance(feedback, dict)
-        assert feedback["is_equivalent"] is True
-
-    def test_get_fsa_feedback(self, dfa_accepts_a, equivalent_dfa):
-        feedback = get_fsa_feedback(dfa_accepts_a, equivalent_dfa)
-        assert isinstance(feedback, FSAFeedback)
-
-    def test_check_fsa_properties(self, dfa_accepts_a):
-        props = check_fsa_properties(dfa_accepts_a)
-        assert props["is_valid"] is True
-        assert props["is_deterministic"] is True
-        assert props["is_complete"] is True
-
-    def test_check_fsa_properties_unreachable(self, dfa_with_unreachable):
-        props = check_fsa_properties(dfa_with_unreachable)
-        assert "unreachable" in props["unreachable_states"]
-
-    def test_quick_equivalence_check_equal(self, dfa_accepts_a, equivalent_dfa):
-        is_equiv, hint, hint_type = quick_equivalence_check(dfa_accepts_a, equivalent_dfa)
-        assert is_equiv is True
-
-    def test_quick_equivalence_check_different(self, dfa_accepts_a, dfa_accepts_a_or_b):
-        is_equiv, hint, hint_type = quick_equivalence_check(dfa_accepts_a, dfa_accepts_a_or_b)
-        assert is_equiv is False
-        assert hint is not None
 
 
 # =============================================================================
