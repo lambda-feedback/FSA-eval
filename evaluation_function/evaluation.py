@@ -6,6 +6,7 @@ from .schemas.result import Result
 from .correction import analyze_fsa_correction
 
 
+
 def evaluation_function(
     response: Any,
     answer: Any,
