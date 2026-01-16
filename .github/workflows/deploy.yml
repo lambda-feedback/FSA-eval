@@ -53,24 +53,19 @@ jobs:
           key: venv-${{ runner.os }}-${{ steps.python-setup.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
-        if: steps.dependencies-cache.outputs.cache-hit != 'true'
         run: |
-          poetry install  --no-interaction --no-root
+          poetry install --no-interaction
 
       # TODO: add linting / black / flake8
       # - name: Lint with flake8
       #   run: |
-      #     source .venv/bin/activate
-      #     # stop the build if there are Python syntax errors or undefined names
-      #     flake8 ./evaluation_function --count --select=E9,F63,F7,F82 --show-source --statistics
-      #     # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-      #     flake8 ./evaluation_function --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      #     poetry run flake8 ./evaluation_function --count --select=E9,F63,F7,F82 --show-source --statistics
+      #     poetry run flake8 ./evaluation_function --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
       - name: Run tests
         if: always()
         run: |
-          source .venv/bin/activate
-          pytest --junit-xml=./reports/pytest.xml --tb=auto -v
+          poetry run pytest --junit-xml=./reports/pytest.xml --tb=auto -v
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
