@@ -28,57 +28,6 @@ Represents a Finite State Automaton as a 5-tuple (Q, Σ, δ, q0, F).
 }
 ```
 
-## Answer Schema (`answer.py`)
-
-Four ways to specify the expected language:
-
-### 1. Test Cases (Recommended)
-```json
-{
-    "type": "test_cases",
-    "value": [
-        {"input": "ab", "expected": true},
-        {"input": "ba", "expected": false},
-        {"input": "", "expected": false}
-    ]
-}
-```
-
-### 2. Reference FSA
-```json
-{
-    "type": "reference_fsa",
-    "value": {
-        "states": ["q0", "q1"],
-        "alphabet": ["a"],
-        "transitions": [{"from_state": "q0", "to_state": "q1", "symbol": "a"}],
-        "initial_state": "q0",
-        "accept_states": ["q1"]
-    }
-}
-```
-
-### 3. Regular Expression
-```json
-{
-    "type": "regex",
-    "value": "(a|b)*ab"
-}
-```
-
-### 4. Grammar
-```json
-{
-    "type": "grammar",
-    "value": {
-        "start": "S",
-        "productions": {
-            "S": ["aS", "bS", "ab"]
-        }
-    }
-}
-```
-
 ## Params Schema (`params.py`)
 
 Configuration for evaluation behavior:
