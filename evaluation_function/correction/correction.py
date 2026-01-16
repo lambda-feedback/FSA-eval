@@ -35,7 +35,7 @@ def _check_minimality(fsa: FSA) -> Tuple[bool, Optional[ValidationError]]:
         if len(minimized.states) < len(fsa.states):
             return False, ValidationError(
                 message=f"FSA is not minimal: has {len(fsa.states)} states but can be reduced to {len(minimized.states)}",
-                code=ErrorCode.NOT_COMPLETE,
+                code=ErrorCode.NOT_MINIMAL,
                 severity="error",
                 suggestion="Minimize your FSA by merging equivalent states"
             )
@@ -65,8 +65,8 @@ def _build_feedback(
     errors = [e for e in all_errors if e.severity == "error"]
     warnings = [e for e in all_errors if e.severity in ("warning", "info")]
     
-    # Build hints from suggestions
-    hints = [e.suggestion for e in equivalence_errors if e.suggestion]
+    # Build hints from all error suggestions
+    hints = [e.suggestion for e in all_errors if e.suggestion]
     if structural_info:
         if structural_info.unreachable_states:
             hints.append("Consider removing unreachable states")
@@ -82,7 +82,7 @@ def _build_feedback(
         warnings=warnings,
         structural=structural_info,
         language=language,
-        hints=hints[:5]
+        hints=hints
     )
 
 
