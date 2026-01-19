@@ -43,5 +43,5 @@ def evaluation_function(
     except Exception as e:
         return LFResult(
             is_correct=False,
-            feedback_items=[("error", f"Invalid FSA format: {str(e)}")]
+            feedback_items=[("error", f"Invalid FSA format: {str(e)}, received: {response}")]
         )
