@@ -1,7 +1,7 @@
 from typing import Any
 from lf_toolkit.evaluation import Result as LFResult, Params
 
-from .schemas import FSA
+from .schemas import FSA, FSAFrontend
 from .schemas.result import Result
 from .correction import analyze_fsa_correction
 
@@ -16,8 +16,8 @@ def evaluation_function(
     Evaluate a student's FSA response against the expected answer.
     
     Args:
-        response: Student's FSA (dict with states, alphabet, transitions, etc.)
-        answer: Expected FSA 
+        response: Student's FSA (dict with states, alphabet, transitions, etc.), since frontend constriants, this is FSAFrontend
+        answer: Expected FSA still, FSAFrontend for the same reason
         params: Extra parameters (e.g., require_minimal)
     
     Returns:
@@ -25,8 +25,12 @@ def evaluation_function(
     """
     try:
         # Parse FSAs from input
-        student_fsa = FSA.model_validate(response)
-        expected_fsa = FSA.model_validate(answer)
+        student_fsa_ = FSAFrontend.model_validate(response)
+        expected_fsa_ = FSAFrontend.model_validate(answer)
+
+        student_fsa = student_fsa_.from_flattened()
+        expected_fsa = expected_fsa_.from_flattened()
+
         
         # Get require_minimal from params if present
         require_minimal = params.get("require_minimal", False) if hasattr(params, "get") else False
