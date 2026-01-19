@@ -8,6 +8,8 @@ from typing import List, Optional, Literal
 from enum import Enum
 from pydantic import BaseModel, Field
 
+from evaluation_function.schemas.fsa import FSA
+
 
 class ErrorCode(str, Enum):
     """
@@ -313,4 +315,10 @@ class Result(BaseModel):
     fsa_feedback: Optional[FSAFeedback] = Field(
         default=None,
         description="Detailed structured feedback with element highlighting for UI"
+    )
+
+    # this is dev only
+    input_data: Optional[FSA] = Field(
+        default=None,
+        description="The parsed FSA input data (for development/debugging purposes only)"
     )
