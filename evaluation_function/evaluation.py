@@ -1,7 +1,9 @@
 from typing import Any
 from lf_toolkit.evaluation import Result as LFResult, Params
 
-from .schemas import FSA, FSAFrontend
+# note: this file is a temperary workaround, if the frontend -> backend communication succeed, fix this file
+
+from .schemas import FSA#, FSAFrontend
 from .schemas.result import Result
 from .correction import analyze_fsa_correction
 
@@ -12,6 +14,11 @@ from .correction import analyze_fsa_correction
 #     is_correct=False,
 #         feedback_items=[("error", f"{payload}")]
 #     )
+
+def validate_fsa(value: str | dict) -> FSA:
+    if isinstance(value, str):
+        return FSA.model_validate_json(value)
+    return FSA.model_validate(value)
 
 def evaluation_function(
     response: Any,
@@ -31,12 +38,16 @@ def evaluation_function(
     """
     try:
         # Parse FSAs from input
-        student_fsa_ = FSAFrontend.model_validate(response)
-        expected_fsa_ = FSAFrontend.model_validate(answer)
+        # student_fsa_ = FSAFrontend.model_validate(response)
+        # expected_fsa_ = FSAFrontend.model_validate(answer)
 
-        # Convert from flattened format to FSA
-        student_fsa = FSAFrontend.from_flattened(student_fsa_.model_dump())
-        expected_fsa = FSAFrontend.from_flattened(expected_fsa_.model_dump())
+        # student_fsa = student_fsa_.from_flattened()
+        # expected_fsa = expected_fsa_.from_flattened()
+
+        # as a temporary workaround we assume the response and answer are all valid json strings
+        student_fsa = validate_fsa(response)
+        expected_fsa = validate_fsa(answer)
+
 
         
         # Get require_minimal from params if present
