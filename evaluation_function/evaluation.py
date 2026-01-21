@@ -34,8 +34,9 @@ def evaluation_function(
         student_fsa_ = FSAFrontend.model_validate(response)
         expected_fsa_ = FSAFrontend.model_validate(answer)
 
-        student_fsa = student_fsa_.from_flattened()
-        expected_fsa = expected_fsa_.from_flattened()
+        # Convert from flattened format to FSA
+        student_fsa = FSAFrontend.from_flattened(student_fsa_.model_dump())
+        expected_fsa = FSAFrontend.from_flattened(expected_fsa_.model_dump())
 
         
         # Get require_minimal from params if present
