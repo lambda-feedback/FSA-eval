@@ -48,6 +48,7 @@ def evaluation_function(
         student_fsa = validate_fsa(response)
         expected_fsa = validate_fsa(answer)
 
+
         
         # Get require_minimal from params if present
         require_minimal = params.get("require_minimal", False) if hasattr(params, "get") else False
