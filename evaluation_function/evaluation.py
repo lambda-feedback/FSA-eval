@@ -5,7 +5,13 @@ from .schemas import FSA, FSAFrontend
 from .schemas.result import Result
 from .correction import analyze_fsa_correction
 
-
+# def evaluation_function(
+#     payload: Any
+# ) -> LFResult:
+#   return LFResult(
+#     is_correct=False,
+#         feedback_items=[("error", f"{payload}")]
+#     )
 
 def evaluation_function(
     response: Any,
