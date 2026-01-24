@@ -31,7 +31,9 @@ ENV FUNCTION_COMMAND="python"
 # Args to start the evaluation function with
 ENV FUNCTION_ARGS="-m,evaluation_function.main"
 
-# The transport to use for the RPC server
-ENV FUNCTION_RPC_TRANSPORT="ipc"
+# Use file-based communication interface instead of RPC
+# This handles larger payloads better (shimmy writes input to file, reads output from file)
+# shimmy will append input/output file paths as the last two arguments
+ENV FUNCTION_INTERFACE="file"
 
 ENV LOG_LEVEL="debug"
