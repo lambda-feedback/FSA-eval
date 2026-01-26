@@ -33,12 +33,11 @@ def _check_minimality(fsa: FSA) -> Tuple[bool, Optional[ValidationError]]:
     try:
         minimized = hopcroft_minimization(fsa)
         if len(minimized.states) < len(fsa.states):
-            diff = len(fsa.states) - len(minimized.states)
             return False, ValidationError(
-                message=f"Your FSA works correctly, but it's not minimal! You have {len(fsa.states)} states, but only {len(minimized.states)} are needed. You could remove {diff} state(s).",
+                message=f"FSA is not minimal: has {len(fsa.states)} states but can be reduced to {len(minimized.states)}",
                 code=ErrorCode.NOT_MINIMAL,
                 severity="error",
-                suggestion="Look for states that behave identically (same transitions and acceptance) - these can be merged into one"
+                suggestion="Minimize your FSA by merging equivalent states"
             )
         return True, None
     except Exception:
@@ -70,11 +69,9 @@ def _build_feedback(
     hints = [e.suggestion for e in all_errors if e.suggestion]
     if structural_info:
         if structural_info.unreachable_states:
-            unreachable = ", ".join(structural_info.unreachable_states)
-            hints.append(f"Tip: States {{{unreachable}}} can't be reached from your start state - you might want to remove them or add transitions to them")
+            hints.append("Consider removing unreachable states")
         if structural_info.dead_states:
-            dead = ", ".join(structural_info.dead_states)
-            hints.append(f"Tip: States {{{dead}}} can never lead to acceptance - this might be intentional (trap states) or a bug")
+            hints.append("Dead states can never lead to acceptance")
     
     # Build language comparison
     language = LanguageComparison(are_equivalent=len(equivalence_errors) == 0)
@@ -95,20 +92,17 @@ def _summarize_errors(errors: List[ValidationError]) -> str:
     for error in errors:
         msg = error.message.lower()
         if "alphabet" in msg:
-            error_types.add("alphabet issue")
-        elif "states" in msg and ("many" in msg or "few" in msg or "needed" in msg):
-            error_types.add("incorrect number of states")
-        elif "accepting" in msg or "accept" in msg:
-            error_types.add("accepting states issue")
-        elif "transition" in msg or "reading" in msg:
-            error_types.add("transition issue")
+            error_types.add("alphabet mismatch")
+        elif "state" in msg and "count" in msg:
+            error_types.add("state count mismatch")
+        elif "accepting" in msg or "incorrectly marked" in msg:
+            error_types.add("acceptance error")
+        elif "transition" in msg:
+            error_types.add("transition error")
     
-    if len(error_types) == 1:
-        issue = list(error_types)[0]
-        return f"Almost there! Your FSA has an {issue}. Check the details below."
-    elif error_types:
-        return f"Your FSA doesn't quite match the expected language. Issues found: {', '.join(error_types)}"
-    return f"Your FSA doesn't accept the correct language. Found {len(errors)} issue(s) to fix."
+    if error_types:
+        return f"Languages differ: {', '.join(error_types)}"
+    return f"Languages differ: {len(errors)} issue(s)"
 
 
 # =============================================================================
@@ -140,11 +134,7 @@ def analyze_fsa_correction(
     # Step 1: Validate student FSA structure
     student_errors = is_valid_fsa(student_fsa)
     if student_errors:
-        num_errors = len(student_errors)
-        if num_errors == 1:
-            summary = "Your FSA has a structural problem that needs to be fixed first. See the details below."
-        else:
-            summary = f"Your FSA has {num_errors} structural problems that need to be fixed first. See the details below."
+        summary = "FSA has structural errors"
         return Result(
             is_correct=False,
             feedback=summary,
@@ -156,7 +146,7 @@ def analyze_fsa_correction(
     if expected_errors:
         return Result(
             is_correct=False,
-            feedback="Oops! There's an issue with the expected answer. Please contact your instructor."
+            feedback="Internal error: expected FSA is invalid"
         )
     
     # Step 3: Check minimality if required
@@ -172,18 +162,15 @@ def analyze_fsa_correction(
     equivalence_errors = fsas_accept_same_language(student_fsa, expected_fsa)
     
     if not equivalence_errors and not validation_errors:
-        # Success message with some stats
-        state_count = len(student_fsa.states)
-        feedback = f"Correct! Your FSA with {state_count} state(s) accepts exactly the right language. Well done!"
         return Result(
             is_correct=True,
-            feedback=feedback,
-            fsa_feedback=_build_feedback("Your FSA is correct!", [], [], structural_info)
+            feedback="Correct! FSA accepts the expected language.",
+            fsa_feedback=_build_feedback("FSA is correct", [], [], structural_info)
         )
     
     # Build result with errors
     is_correct = len(equivalence_errors) == 0 and len(validation_errors) == 0
-    summary = _summarize_errors(equivalence_errors) if equivalence_errors else "Your FSA has some issues to address."
+    summary = _summarize_errors(equivalence_errors) if equivalence_errors else "FSA has issues"
     
     return Result(
         is_correct=is_correct,
