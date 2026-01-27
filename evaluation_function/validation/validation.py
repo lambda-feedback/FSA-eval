@@ -1,4 +1,3 @@
-from itertools import product
 from typing import Dict, List, Set
 from collections import deque
 
@@ -21,10 +20,10 @@ def is_valid_fsa(fsa: FSA) -> List[ValidationError]:
     if not states:
         errors.append(
             ValidationError(
-                message="The FSA has no states defined",
+                message="Your FSA needs at least one state to work. Every automaton must have states to process input!",
                 code=ErrorCode.EMPTY_STATES,
                 severity="error",
-                suggestion="Add at least one state to the FSA"
+                suggestion="Start by adding a state - this will be your starting point for the automaton"
             )
         )
         return errors  # Early return since other checks depend on states
@@ -33,10 +32,10 @@ def is_valid_fsa(fsa: FSA) -> List[ValidationError]:
     if not alphabet:
         errors.append(
             ValidationError(
-                message="The alphabet is empty",
+                message="Your FSA needs an alphabet - the set of symbols it can read. Without an alphabet, there's nothing to process!",
                 code=ErrorCode.EMPTY_ALPHABET,
                 severity="error",
-                suggestion="Add at least one symbol to the alphabet"
+                suggestion="Define the input symbols your FSA should recognize (e.g., 'a', 'b', '0', '1')"
             )
         )
 
@@ -44,14 +43,14 @@ def is_valid_fsa(fsa: FSA) -> List[ValidationError]:
     if fsa.initial_state not in states:
         errors.append(
             ValidationError(
-                message=f"The initial state '{fsa.initial_state}' is not defined in the FSA",
+                message=f"Oops! Your initial state '{fsa.initial_state}' doesn't exist in your FSA. The initial state must be one of your defined states.",
                 code=ErrorCode.INVALID_INITIAL,
                 severity="error",
                 highlight=ElementHighlight(
                     type="initial_state",
                     state_id=fsa.initial_state
                 ),
-                suggestion="Include the initial state in your FSA or change your initial state"
+                suggestion=f"Either add '{fsa.initial_state}' to your states, or choose an existing state as the initial state"
             )
         )
 
@@ -60,14 +59,14 @@ def is_valid_fsa(fsa: FSA) -> List[ValidationError]:
         if acc not in states:
             errors.append(
                 ValidationError(
-                    message=f"The accept state '{acc}' is not defined in the FSA",
+                    message=f"The accepting state '{acc}' isn't in your FSA. Accepting states must be part of your state set.",
                     code=ErrorCode.INVALID_ACCEPT,
                     severity="error",
                     highlight=ElementHighlight(
                         type="accept_state",
                         state_id=acc
                     ),
-                    suggestion="Include the accept state in your FSA or change your accept state"
+                    suggestion=f"Either add '{acc}' to your states, or remove it from accepting states"
                 )
             )
 
@@ -76,7 +75,7 @@ def is_valid_fsa(fsa: FSA) -> List[ValidationError]:
         if t.from_state not in states:
             errors.append(
                 ValidationError(
-                    message=f"The source state '{t.from_state}' in transition '{t.symbol}' is not defined",
+                    message=f"This transition starts from '{t.from_state}', but that state doesn't exist in your FSA.",
                     code=ErrorCode.INVALID_TRANSITION_SOURCE,
                     severity="error",
                     highlight=ElementHighlight(
@@ -85,13 +84,13 @@ def is_valid_fsa(fsa: FSA) -> List[ValidationError]:
                         to_state=t.to_state,
                         symbol=t.symbol
                     ),
-                    suggestion=f"Add state '{t.from_state}' to the FSA or change the transition source"
+                    suggestion=f"Add '{t.from_state}' to your states, or update this transition to start from an existing state"
                 )
             )
         if t.to_state not in states:
             errors.append(
                 ValidationError(
-                    message=f"The destination state '{t.to_state}' in transition '{t.symbol}' is not defined",
+                    message=f"This transition goes to '{t.to_state}', but that state doesn't exist in your FSA.",
                     code=ErrorCode.INVALID_TRANSITION_DEST,
                     severity="error",
                     highlight=ElementHighlight(
@@ -100,13 +99,13 @@ def is_valid_fsa(fsa: FSA) -> List[ValidationError]:
                         to_state=t.to_state,
                         symbol=t.symbol
                     ),
-                    suggestion=f"Add state '{t.to_state}' to the FSA or change the transition destination"
+                    suggestion=f"Add '{t.to_state}' to your states, or update this transition to go to an existing state"
                 )
             )
         if t.symbol not in alphabet:
             errors.append(
                 ValidationError(
-                    message=f"The transition symbol '{t.symbol}' is not in the alphabet",
+                    message=f"The symbol '{t.symbol}' in this transition isn't in your alphabet. Transitions can only use symbols from the alphabet.",
                     code=ErrorCode.INVALID_SYMBOL,
                     severity="error",
                     highlight=ElementHighlight(
@@ -115,7 +114,7 @@ def is_valid_fsa(fsa: FSA) -> List[ValidationError]:
                         to_state=t.to_state,
                         symbol=t.symbol
                     ),
-                    suggestion=f"Add symbol '{t.symbol}' to the alphabet or change the transition symbol"
+                    suggestion=f"Either add '{t.symbol}' to your alphabet, or change this transition to use an existing symbol"
                 )
             )
 
@@ -140,7 +139,7 @@ def is_deterministic(fsa: FSA) -> List[ValidationError]:
         if key in seen:
             errors.append(
                 ValidationError(
-                    message=f"Non-deterministic: multiple transitions from '{t.from_state}' on symbol '{t.symbol}'",
+                    message=f"Your FSA has multiple transitions from state '{t.from_state}' when reading '{t.symbol}'. In a DFA, each state can only have one transition per symbol.",
                     code=ErrorCode.DUPLICATE_TRANSITION,
                     severity="error",
                     highlight=ElementHighlight(
@@ -149,7 +148,7 @@ def is_deterministic(fsa: FSA) -> List[ValidationError]:
                         to_state=t.to_state,
                         symbol=t.symbol
                     ),
-                    suggestion="Remove duplicate transitions or convert to NFA if nondeterminism is intended"
+                    suggestion=f"Keep only one transition from '{t.from_state}' on '{t.symbol}', or if you meant to create an NFA, that's also valid!"
                 )
             )
         seen.add(key)
@@ -169,7 +168,7 @@ def is_complete(fsa: FSA) -> List[ValidationError]:
         errors.extend(det_errors)
         errors.append(
             ValidationError(
-                message="Cannot check completeness for non-deterministic FSA",
+                message="We can only check completeness for deterministic FSAs. Please fix the determinism issues first.",
                 code=ErrorCode.NOT_DETERMINISTIC,
                 severity="error"
             )
@@ -185,7 +184,7 @@ def is_complete(fsa: FSA) -> List[ValidationError]:
             if (state, symbol) not in transition_keys:
                 errors.append(
                     ValidationError(
-                        message=f"Missing transition from state '{state}' on symbol '{symbol}' to make the FSA complete",
+                        message=f"State '{state}' is missing a transition for symbol '{symbol}'. A complete DFA needs transitions for every symbol from every state.",
                         code=ErrorCode.MISSING_TRANSITION,
                         severity="error",
                         highlight=ElementHighlight(
@@ -193,7 +192,7 @@ def is_complete(fsa: FSA) -> List[ValidationError]:
                             state_id=state,
                             symbol=symbol
                         ),
-                        suggestion=f"Add a transition from state '{state}' on symbol '{symbol}'"
+                        suggestion=f"Add a transition from '{state}' when reading '{symbol}' - it can go to any state, including a 'trap' state"
                     )
                 )
     return errors
@@ -227,14 +226,14 @@ def find_unreachable_states(fsa: FSA) -> List[ValidationError]:
         if state not in visited:
             errors.append(
                 ValidationError(
-                    message=f"State '{state}' is unreachable from the initial state",
+                    message=f"State '{state}' can never be reached! There's no path from your initial state to this state.",
                     code=ErrorCode.UNREACHABLE_STATE,
-                    severity="warning",  # Changed to warning as it's not always an error
+                    severity="warning",
                     highlight=ElementHighlight(
                         type="state",
                         state_id=state
                     ),
-                    suggestion=f"Add a transition to state '{state}' from a reachable state, or remove it if unnecessary"
+                    suggestion=f"Connect '{state}' to your FSA by adding a transition to it, or remove it if it's not needed"
                 )
             )
     return errors
@@ -253,14 +252,14 @@ def find_dead_states(fsa: FSA) -> List[ValidationError]:
             if state != fsa.initial_state or state not in fsa.accept_states:
                 errors.append(
                     ValidationError(
-                        message=f"State '{state}' cannot reach any accepting state (no accept states defined)",
+                        message=f"Your FSA has no accepting states, so no input string can ever be accepted! This means the language is empty.",
                         code=ErrorCode.DEAD_STATE,
                         severity="warning",
                         highlight=ElementHighlight(
                             type="state",
                             state_id=state
                         ),
-                        suggestion="Add at least one accept state to the FSA"
+                        suggestion="If you want your FSA to accept some strings, mark at least one state as accepting"
                     )
                 )
         return errors
@@ -285,14 +284,14 @@ def find_dead_states(fsa: FSA) -> List[ValidationError]:
         if state not in reachable_to_accept:
             errors.append(
                 ValidationError(
-                    message=f"State '{state}' is dead (cannot reach any accepting state)",
+                    message=f"State '{state}' is a dead end - once you enter it, you can never reach an accepting state. This is often called a 'trap state'.",
                     code=ErrorCode.DEAD_STATE,
-                    severity="warning",  # Changed to warning as it's not always an error
+                    severity="warning",
                     highlight=ElementHighlight(
                         type="state",
                         state_id=state
                     ),
-                    suggestion=f"Add a transition from state '{state}' to a state that can reach an accept state, or make state '{state}' accepting"
+                    suggestion=f"This might be intentional (to reject certain inputs), or you could add a path from '{state}' to an accepting state"
                 )
             )
     return errors
@@ -417,9 +416,6 @@ def get_structured_info_of_fsa(fsa: FSA) -> StructuralInfo:
     """
     Get structured information about the FSA including properties and analysis.
     """
-    # Get validation errors first
-    validation_errors = is_valid_fsa(fsa)
-    
     # Check determinism - returns boolean
     det_errors = is_deterministic(fsa)
     is_deterministic_bool = len(det_errors) == 0
@@ -460,25 +456,44 @@ def are_isomorphic(fsa1: FSA, fsa2: FSA) -> List[ValidationError]:
     errors = []
     # 1. Alphabet Check (Mandatory)
     if set(fsa1.alphabet) != set(fsa2.alphabet):
+        student_only = set(fsa1.alphabet) - set(fsa2.alphabet)
+        expected_only = set(fsa2.alphabet) - set(fsa1.alphabet)
+        
+        msg_parts = ["Your alphabet doesn't match what's expected."]
+        if student_only:
+            msg_parts.append(f"You have extra symbols: {student_only}")
+        if expected_only:
+            msg_parts.append(f"You're missing symbols: {expected_only}")
+        
         errors.append(
             ValidationError(
-                message="The alphabet of your FSA does not match the required alphabet.",
+                message=" ".join(msg_parts),
                 code=ErrorCode.LANGUAGE_MISMATCH,
                 severity="error",
-                suggestion=f"Your alphabet: {set(fsa1.alphabet)}. Expected: {set(fsa2.alphabet)}."
+                suggestion="Make sure your alphabet contains exactly the symbols needed for this language"
             )
         )
 
     # 2. Basic Structural Check (State Count)
     if len(fsa1.states) != len(fsa2.states):
-        errors.append(
-            ValidationError(
-                message=f"FSA structure mismatch: expected {len(fsa2.states)} states, but found {len(fsa1.states)}.",
-                code=ErrorCode.LANGUAGE_MISMATCH,
-                severity="error",
-                suggestion="Verify if you have unnecessary states or if you have minimized your FSA."
+        if len(fsa1.states) > len(fsa2.states):
+            errors.append(
+                ValidationError(
+                    message=f"Your FSA has {len(fsa1.states)} states, but the minimal solution only needs {len(fsa2.states)}. You might have redundant states.",
+                    code=ErrorCode.LANGUAGE_MISMATCH,
+                    severity="error",
+                    suggestion="Look for states that behave identically and could be merged, or check for unreachable states"
+                )
             )
-        )
+        else:
+            errors.append(
+                ValidationError(
+                    message=f"Your FSA has {len(fsa1.states)} states, but at least {len(fsa2.states)} are needed. You might be missing some states.",
+                    code=ErrorCode.LANGUAGE_MISMATCH,
+                    severity="error",
+                    suggestion="Think about what different 'situations' your FSA needs to remember - each usually needs its own state"
+                )
+            )
 
     # 3. State Mapping Initialization
     mapping: Dict[str, str] = {fsa1.initial_state: fsa2.initial_state}
@@ -497,16 +512,26 @@ def are_isomorphic(fsa1: FSA, fsa2: FSA) -> List[ValidationError]:
 
         # 4. Check Acceptance Parity
         if (s1 in accept1) != (s2 in accept2):
-            expected_type = "accepting" if s2 in accept2 else "non-accepting"
-            errors.append(
-                ValidationError(
-                    message=f"State '{s1}' is incorrectly marked. It should be an {expected_type} state.",
-                    code=ErrorCode.LANGUAGE_MISMATCH,
-                    severity="error",
-                    highlight=ElementHighlight(type="state", state_id=s1),
-                    suggestion=f"Toggle the 'accept' status of state '{s1}'."
+            if s2 in accept2:
+                errors.append(
+                    ValidationError(
+                        message=f"State '{s1}' should be an accepting state, but it's not marked as one. Strings that end here should be accepted!",
+                        code=ErrorCode.LANGUAGE_MISMATCH,
+                        severity="error",
+                        highlight=ElementHighlight(type="state", state_id=s1),
+                        suggestion=f"Mark state '{s1}' as an accepting state (add it to your accept states)"
+                    )
                 )
-            )
+            else:
+                errors.append(
+                    ValidationError(
+                        message=f"State '{s1}' is marked as accepting, but it shouldn't be. Strings that end here should be rejected!",
+                        code=ErrorCode.LANGUAGE_MISMATCH,
+                        severity="error",
+                        highlight=ElementHighlight(type="state", state_id=s1),
+                        suggestion=f"Remove state '{s1}' from your accepting states"
+                    )
+                )
 
         # 5. Check Transitions for every symbol in the shared alphabet
         for symbol in fsa1.alphabet:
@@ -515,15 +540,26 @@ def are_isomorphic(fsa1: FSA, fsa2: FSA) -> List[ValidationError]:
 
             # Missing Transition Check
             if (dest1 is None) != (dest2 is None):
-                errors.append(
-                    ValidationError(
-                        message=f"Missing or extra transition from state '{s1}' on symbol '{symbol}'.",
-                        code=ErrorCode.LANGUAGE_MISMATCH,
-                        severity="error",
-                        highlight=ElementHighlight(type="state", state_id=s1, symbol=symbol),
-                        suggestion="Ensure your DFA is complete and follows the transition logic."
+                if dest1 is None:
+                    errors.append(
+                        ValidationError(
+                            message=f"State '{s1}' is missing a transition for symbol '{symbol}'. What should happen when you read '{symbol}' here?",
+                            code=ErrorCode.LANGUAGE_MISMATCH,
+                            severity="error",
+                            highlight=ElementHighlight(type="state", state_id=s1, symbol=symbol),
+                            suggestion=f"Add a transition from '{s1}' on '{symbol}' to handle this input"
+                        )
                     )
-                )
+                else:
+                    errors.append(
+                        ValidationError(
+                            message=f"State '{s1}' has an unexpected transition on '{symbol}'. This transition might not be needed.",
+                            code=ErrorCode.LANGUAGE_MISMATCH,
+                            severity="error",
+                            highlight=ElementHighlight(type="state", state_id=s1, symbol=symbol),
+                            suggestion=f"Review if the transition from '{s1}' on '{symbol}' is correct"
+                        )
+                    )
             
             if dest1 is not None:
                 if dest1 not in mapping:
@@ -536,7 +572,7 @@ def are_isomorphic(fsa1: FSA, fsa2: FSA) -> List[ValidationError]:
                     if mapping[dest1] != dest2:
                         errors.append(
                             ValidationError(
-                                message=f"Transition from '{s1}' on '{symbol}' leads to the wrong state.",
+                                message=f"When in state '{s1}' and reading '{symbol}', you go to '{dest1}', but that leads to incorrect behavior. Check where this transition should go!",
                                 code=ErrorCode.LANGUAGE_MISMATCH,
                                 severity="error",
                                 highlight=ElementHighlight(
@@ -545,7 +581,7 @@ def are_isomorphic(fsa1: FSA, fsa2: FSA) -> List[ValidationError]:
                                     to_state=dest1, 
                                     symbol=symbol
                                 ),
-                                suggestion="Check if this transition should point to a different state."
+                                suggestion=f"Think about what state the FSA should be in after reading '{symbol}' from '{s1}' - try tracing through some example strings"
                             )
                         )
 
