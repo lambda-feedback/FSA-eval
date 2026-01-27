@@ -27,13 +27,25 @@ def evaluation_function(
         LFResult with is_correct and feedback_items
     """
     try:
-        # Extract student and expected FSAs from whatever is present
-        raw_response = response or getattr(params, "response", None) or params.get("response", None)
-        raw_answer = answer or getattr(params, "answer", None) or params.get("answer", None)
-        extra_params = params.get("params") or params
+        # TEMPORARY WORKAROUND: Extract from params if not passed directly
+        if params is None:
+            params = {}
 
-        if raw_response is None or raw_answer is None:
-            raise ValueError("Missing FSA data: response or answer is None")
+        if isinstance(params, dict):
+            raw_response = response or params.get("response") or {}
+            raw_answer = answer or params.get("answer") or {}
+            extra_params = params.get("params") or {}
+        else:
+            # If params is not a dict, fallback to empty dict
+            raw_response = response
+            raw_answer = answer
+            extra_params = {}
+
+        if not raw_response or not raw_answer:
+            raise ValueError(
+                f"Missing FSA data: response or answer is None\n"
+                f"raw_response: {raw_response}\nraw_answer: {raw_answer}"
+            )
 
         # Parse FSAs
         student_fsa = validate_fsa(raw_response)
