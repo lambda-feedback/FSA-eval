@@ -69,7 +69,7 @@ class FSAFrontend(BaseModel):
         }
 
     @classmethod
-    def from_flattened(cls, data: dict) -> FSA:
+    def toFSA(cls, data: dict) -> FSA:
         """
         Convert frontend FSA payload (with transitions as "from|symbol|to") 
         into the FSABackend model with proper Transition objects.

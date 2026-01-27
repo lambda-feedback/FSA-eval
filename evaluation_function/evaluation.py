@@ -1,14 +1,14 @@
 from typing import Any
 from lf_toolkit.evaluation import Result as LFResult
-from .schemas import FSA
+from .schemas import FSA, FSAFrontend
 from .schemas.result import Result
 from .correction import analyze_fsa_correction
 
 def validate_fsa(value: str | dict) -> FSA:
     """Parse a FSA from JSON string or dict."""
     if isinstance(value, str):
-        return FSA.model_validate_json(value)
-    return FSA.model_validate(value)
+        return FSAFrontend.model_validate_json(value).toFSA()
+    return FSAFrontend.model_validate(value).toFSA()
 
 def evaluation_function(
     response: Any = None,
