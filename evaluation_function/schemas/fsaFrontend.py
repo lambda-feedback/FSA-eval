@@ -69,17 +69,17 @@ class FSAFrontend(BaseModel):
         }
 
     @classmethod
-    def toFSA(cls, data: dict) -> FSA:
+    def toFSA(cls) -> FSA:
         """
         Convert frontend FSA payload (with transitions as "from|symbol|to") 
         into the FSABackend model with proper Transition objects.
         """
-        states = data.get("states", [])
-        alphabet = data.get("alphabet", [])
-        initial_state = data.get("initial_state", "q0")
-        accept_states = data.get("accept_states", [])
+        states = cls.states
+        alphabet = cls.alphabet
+        initial_state = cls.initial_state
+        accept_states = cls.accept_states
 
-        flat_transitions = data.get("transitions", [])
+        flat_transitions = cls.transitions
         transitions: List[Transition] = []
         for t in flat_transitions:
             try:
