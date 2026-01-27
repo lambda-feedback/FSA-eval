@@ -68,32 +68,52 @@ class FSAFrontend(BaseModel):
             }
         }
 
-    @classmethod
-    def toFSA(cls) -> FSA:
-        """
-        Convert frontend FSA payload (with transitions as "from|symbol|to") 
-        into the FSABackend model with proper Transition objects.
-        """
-        states = cls.states
-        alphabet = cls.alphabet
-        initial_state = cls.initial_state
-        accept_states = cls.accept_states
-
-        flat_transitions = cls.transitions
+    def toFSA(self) -> FSA:
         transitions: List[Transition] = []
-        for t in flat_transitions:
-            try:
-                from_state, symbol, to_state = t.split("|")
-                transitions.append(
-                    Transition(from_state=from_state, symbol=symbol, to_state=to_state)
+
+        for t in self.transitions:
+            parts = t.split("|")
+
+            # allow trailing delimiter but enforce structure
+            if len(parts) == 4 and parts[-1] == "":
+                parts = parts[:-1]
+
+            if len(parts) != 3:
+                raise ValueError(
+                    f"Invalid transition format '{t}'. "
+                    "Expected 'from|symbol|to'"
                 )
-            except ValueError:
-                raise ValueError(f"Invalid transition format: '{t}'")
+
+            from_state, symbol, to_state = parts
+
+            if from_state not in self.states:
+                raise ValueError(f"Unknown from_state '{from_state}'")
+
+            if to_state not in self.states:
+                raise ValueError(f"Unknown to_state '{to_state}'")
+
+            if symbol not in self.alphabet:
+                raise ValueError(f"Symbol '{symbol}' not in alphabet")
+
+            transitions.append(
+                Transition(
+                    from_state=from_state,
+                    symbol=symbol,
+                    to_state=to_state,
+                )
+            )
+
+        if self.initial_state not in self.states:
+            raise ValueError("initial_state must be in states")
+
+        for s in self.accept_states:
+            if s not in self.states:
+                raise ValueError(f"Accept state '{s}' not in states")
 
         return FSA(
-            states=states,
-            alphabet=alphabet,
+            states=self.states,
+            alphabet=self.alphabet,
             transitions=transitions,
-            initial_state=initial_state,
-            accept_states=accept_states,
+            initial_state=self.initial_state,
+            accept_states=self.accept_states,
         )
