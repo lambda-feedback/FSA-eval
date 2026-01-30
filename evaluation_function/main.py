@@ -105,16 +105,16 @@ def main():
     - If 2+ args provided: File-based communication (last 2 args are input/output paths)
     - Otherwise: RPC/IPC server mode using lf_toolkit
     """
-    # # Check for file-based communication
-    # # shimmy passes input and output file paths as the last two arguments
-    # if len(sys.argv) >= 3:
-    #     input_path = sys.argv[-2]
-    #     output_path = sys.argv[-1]
+    # Check for file-based communication
+    # shimmy passes input and output file paths as the last two arguments
+    if len(sys.argv) >= 3:
+        input_path = sys.argv[-2]
+        output_path = sys.argv[-1]
         
-    #     # Verify they look like file paths (basic check)
-    #     if not input_path.startswith('-') and not output_path.startswith('-'):
-    #         handle_file_based_communication(input_path, output_path)
-    #         return
+        # Verify they look like file paths (basic check)
+        if not input_path.startswith('-') and not output_path.startswith('-'):
+            handle_file_based_communication(input_path, output_path)
+            return
     
     # Fall back to RPC/IPC server mode
     server = create_server()
