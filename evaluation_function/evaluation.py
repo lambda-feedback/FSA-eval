@@ -26,8 +26,17 @@ def evaluation_function(
     Returns:
         LFResult with is_correct and feedback_items
     """
+    return LFResult(
+        is_correct=False,
+        feedback_items=[(
+            "error",
+            f"Invalid FSA format: {str(e)}\n\n"
+            f"response: {response}\nanswer: {answer}\nparams: {params}"
+        )]
+    )
     try:
         # TEMPORARY WORKAROUND: Extract from params if not passed directly
+        
         if params is None:
             params = {}
 
@@ -59,7 +68,7 @@ def evaluation_function(
         # Return LFResult
         return LFResult(
             is_correct=result.is_correct,
-            feedback_items=[("result", result.feedback), ("errors", result.fsa_feedback.model_dump_json())]
+            feedback_items=[("result", result.feedback), ("errors", result.fsa_feedback.model_dump_json()), ("input", {"answer": answer, "response": response, "params": params})]
         )
 
     except Exception as e:
