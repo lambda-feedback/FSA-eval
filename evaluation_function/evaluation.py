@@ -26,13 +26,6 @@ def evaluation_function(
     Returns:
         LFResult with is_correct and feedback_items
     """
-    return LFResult(
-        is_correct=False,
-        feedback_items=[(
-            "error",
-            f"response: {response}\nanswer: {answer}\nparams: {params}"
-        )]
-    )
     try:
         # TEMPORARY WORKAROUND: Extract from params if not passed directly
         
