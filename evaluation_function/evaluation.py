@@ -9,7 +9,7 @@ def validate_fsa(value: str | dict) -> FSA:
     """Parse a FSA from JSON string or dict."""
     if isinstance(value, str):
         return FSAFrontend.model_validate_json(value).toFSA()
-    return FSAFrontend.model_validate(value).toFSA()
+    return FSAFrontend.model_validate(value).toFSA(), FSAFrontend.model_validate(value).config
 
 def evaluation_function(
     response: Any = None,
@@ -33,16 +33,9 @@ def evaluation_function(
                 f"Missing FSA data: response or answer is None\n"
                 f"response: {response}\nanswer: {answer}"
             )
-        # Extract and remove config from answer
-        raw_config = "{}"
-        if isinstance(answer, dict):
-            raw_config = answer.pop("config", "{}")
-
-        config = json.loads(raw_config)
-
         # Parse FSAs
-        student_fsa = validate_fsa(response)
-        expected_fsa = validate_fsa(answer)
+        student_fsa, student_config = validate_fsa(response)
+        expected_fsa, expected_config = validate_fsa(answer)
 
         require_minimal = params.get("require_minimal", False) if isinstance(params, dict) else False
 
@@ -53,7 +46,7 @@ def evaluation_function(
             feedback_items=[(
                 "error",
                 f"Invalid FSA format: {str(e)}\n\n"
-                f"response: {response}\nanswer: {answer}\nparams: {params}\n\nconfig:{config}"
+                f"response: {response}\nanswer: {answer}\nparams: {params}\n\nstudent config:{student_config}\n\nexpected config:{expected_config}"
             )]
         )
 
