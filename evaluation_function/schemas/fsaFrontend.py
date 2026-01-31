@@ -53,7 +53,7 @@ class FSAFrontend(BaseModel):
         default_factory=list, 
         description="F: Set of accepting/final states"
     )
-
+    config: str | None = Field(default=None)
     class Config:
         schema_extra = {
             "example": {
