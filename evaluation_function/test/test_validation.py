@@ -23,7 +23,7 @@ class TestFSAValidation:
             initial="q0",
             accept=["q1"],
         )
-        assert is_valid_fsa(fsa).ok()
+        assert is_valid_fsa(fsa).ok
 
     def test_invalid_initial_state(self):
         fsa = make_fsa(
@@ -34,7 +34,7 @@ class TestFSAValidation:
             accept=[],
         )
         result = is_valid_fsa(fsa)
-        assert not result.ok()
+        assert not result.ok
         assert ErrorCode.INVALID_INITIAL in [e.code for e in result.errors]
 
     def test_invalid_accept_state(self):
@@ -46,7 +46,7 @@ class TestFSAValidation:
             accept=["q1"],
         )
         result = is_valid_fsa(fsa)
-        assert not result.ok()
+        assert not result.ok
         assert ErrorCode.INVALID_ACCEPT in [e.code for e in result.errors]
 
     def test_invalid_transition_source(self):
@@ -99,7 +99,7 @@ class TestDeterminism:
             initial="q0",
             accept=["q1"],
         )
-        assert is_deterministic(fsa).ok()
+        assert is_deterministic(fsa).ok
 
     def test_nondeterministic_fsa(self):
         fsa = make_fsa(
@@ -113,7 +113,7 @@ class TestDeterminism:
             accept=["q2"],
         )
         result = is_deterministic(fsa)
-        assert not result.ok()
+        assert not result.ok
         assert ErrorCode.DUPLICATE_TRANSITION in [e.code for e in result.errors]
 
 
@@ -133,7 +133,7 @@ class TestCompleteness:
             initial="q0",
             accept=["q1"],
         )
-        assert is_complete(fsa).ok()
+        assert is_complete(fsa).ok
 
     def test_incomplete_dfa(self):
         fsa = make_fsa(
@@ -144,7 +144,7 @@ class TestCompleteness:
             accept=["q1"],
         )
         result = is_complete(fsa)
-        assert not result.ok()
+        assert not result.ok
         assert ErrorCode.MISSING_TRANSITION in [e.code for e in result.errors]
 
     def test_complete_requires_deterministic(self):
@@ -176,7 +176,7 @@ class TestReachabilityAndDeadStates:
             accept=["q1"],
         )
         result = find_unreachable_states(fsa)
-        assert not result.ok()
+        assert not result.ok
         assert ErrorCode.UNREACHABLE_STATE in [e.code for e in result.errors]
 
     def test_find_dead_states(self):
@@ -193,7 +193,7 @@ class TestReachabilityAndDeadStates:
             accept=["q1"],
         )
         result = find_dead_states(fsa)
-        assert not result.ok()
+        assert not result.ok
         assert ErrorCode.DEAD_STATE in [e.code for e in result.errors]
 
     def test_dead_states_no_accept_states(self):
@@ -222,7 +222,7 @@ class TestStringAcceptance:
             initial="q0",
             accept=["q1"],
         )
-        assert accepts_string(fsa, "a").ok()
+        assert accepts_string(fsa, "a").ok
 
     def test_rejected_no_transition(self):
         fsa = make_fsa(
@@ -243,7 +243,7 @@ class TestStringAcceptance:
             initial="q0",
             accept=["q0"],
         )
-        assert accepts_string(fsa, "").ok()
+        assert accepts_string(fsa, "").ok
 
 
 class TestLanguageEquivalence:
@@ -264,7 +264,7 @@ class TestLanguageEquivalence:
             initial="s0",
             accept=["s1"],
         )
-        assert fsas_accept_same_string(fsa1, fsa2, "a") == []
+        assert fsas_accept_same_string(fsa1, fsa2, "a").ok
 
     def test_language_mismatch(self):
         fsa1 = make_fsa(
@@ -281,8 +281,9 @@ class TestLanguageEquivalence:
             initial="s0",
             accept=["s0"],
         )
-        errors = fsas_accept_same_language(fsa1, fsa2)
-        assert ErrorCode.LANGUAGE_MISMATCH in [e.code for e in errors]
+        result = fsas_accept_same_language(fsa1, fsa2)
+        assert not result.ok
+        assert ErrorCode.LANGUAGE_MISMATCH in [e.code for e in result.errors]
 
 
 class TestIsomorphism:
@@ -313,7 +314,8 @@ class TestIsomorphism:
             initial="s0",
             accept=["s1"],
         )
-        assert are_isomorphic(fsa_user, fsa_sol) == []
+        assert are_isomorphic(fsa_user, fsa_sol).ok
+
 
 # =============================================================================
 # Test Minimality
@@ -337,11 +339,14 @@ def dfa_accepts_a():
         accept=["q1"]
     )
 
+
 class TestCheckMinimality:
     """Test check_minimality function."""
 
     def test_minimal_dfa(self, dfa_accepts_a):
-        assert is_minimal(dfa_accepts_a) is True
+        result = is_minimal(dfa_accepts_a)
+        assert result.ok
+        assert result.value is True
 
     def test_non_minimal_dfa_with_unreachable(self):
         non_minimal = make_fsa(
@@ -359,8 +364,5 @@ class TestCheckMinimality:
             initial="q0",
             accept=["q1"]
         )
-        assert is_minimal(non_minimal) is False
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+        result = is_minimal(non_minimal)
+        assert not result.ok
