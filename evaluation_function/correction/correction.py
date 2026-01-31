@@ -12,11 +12,12 @@ from typing import List, Optional
 from evaluation_function.schemas.params import Params
 
 # Schema imports
-from ..schemas import FSA, ValidationError, ErrorCode
+from ..schemas import FSA, ValidationError, ErrorCode, ValidationResult
 from ..schemas.result import Result, FSAFeedback, StructuralInfo, LanguageComparison
 
 # Validation imports
 from ..validation.validation import (
+    are_isomorphic,
     is_valid_fsa,
     is_deterministic,
     is_complete,
@@ -125,7 +126,7 @@ def analyze_fsa_correction(
     # Step 1: Validate student FSA structure
     # -------------------------------------------------------------------------
     student_result = is_valid_fsa(student_fsa)
-    if not student_result.ok():
+    if not student_result.ok:
         summary = (
             "Your FSA has a structural problem that needs to be fixed first."
             if len(student_result.errors) == 1
@@ -147,7 +148,7 @@ def analyze_fsa_correction(
     # Step 2: Validate expected FSA (should never fail)
     # -------------------------------------------------------------------------
     expected_result = is_valid_fsa(expected_fsa)
-    if not expected_result.ok():
+    if not expected_result.ok:
         return Result(
             is_correct=False,
             feedback="Oops! There's an issue with the expected answer. Please contact your instructor."
@@ -158,7 +159,7 @@ def analyze_fsa_correction(
     # -------------------------------------------------------------------------
     if params.expected_type == "DFA":
         det_result = is_deterministic(student_fsa)
-        if not det_result.ok():
+        if not det_result.ok:
             summary = "Your automaton must be deterministic (a DFA)."
             return Result(
                 is_correct=False,
@@ -177,15 +178,17 @@ def analyze_fsa_correction(
     # -------------------------------------------------------------------------
     if params.check_completeness:
         comp_result = is_complete(student_fsa)
-        if not comp_result.ok():
+        if not comp_result.ok:
             validation_errors.extend(comp_result.errors)
 
     # -------------------------------------------------------------------------
     # Step 5: Optional minimality check
     # -------------------------------------------------------------------------
+    validation_result = None
     if params.check_minimality:
-        min_errors = is_minimal(student_fsa)
-        validation_errors.extend(min_errors)
+        validation_result = is_minimal(student_fsa)
+        if not validation_result.ok:
+            validation_errors.extend(validation_result.errors)
 
     # -------------------------------------------------------------------------
     # Step 6: Structural analysis (for feedback only)
@@ -198,20 +201,26 @@ def analyze_fsa_correction(
     equivalence_result = fsas_accept_same_language(
         student_fsa, expected_fsa
     )
-    equivalence_errors = equivalence_result.errors
+    equivalence_errors.extend(equivalence_result.errors)
 
     # -------------------------------------------------------------------------
-    # Step 8: Decide correctness based on evaluation mode
+    # Step 8: Isomorphism
+    # -------------------------------------------------------------------------
+    iso_result = are_isomorphic(student_fsa, expected_fsa)
+    equivalence_errors.extend(iso_result.errors)
+
+    # -------------------------------------------------------------------------
+    # Step 9: Decide correctness based on evaluation mode
     # -------------------------------------------------------------------------
     if params.evaluation_mode == "strict":
-        is_correct = not validation_errors and equivalence_result.ok()
+        is_correct = validation_result is not None and validation_result.ok and equivalence_result.ok and iso_result.ok
     elif params.evaluation_mode == "lenient":
-        is_correct = equivalence_result.ok()
+        is_correct = validation_result is not None and validation_result.ok and equivalence_result.ok
     else:  # partial # I dont know what the partial is meant for, always mark as incorrect?
         is_correct = False
 
     # -------------------------------------------------------------------------
-    # Step 9: Build summary
+    # Step 10: Build summary
     # -------------------------------------------------------------------------
     if is_correct:
         feedback = (
@@ -226,9 +235,10 @@ def analyze_fsa_correction(
             else "Your FSA has some issues to address."
         )
         feedback = summary
+    print(equivalence_errors)
 
     # -------------------------------------------------------------------------
-    # Step 10: Return result
+    # Step 11: Return result
     # -------------------------------------------------------------------------
     return Result(
         is_correct=is_correct,
