@@ -54,19 +54,20 @@ class FSAFrontend(BaseModel):
         description="F: Set of accepting/final states"
     )
     config: str | None = Field(default=None)
-    class Config:
-        schema_extra = {
-            "example": {
-                "states": ["q0", "q1", "q2"],
-                "alphabet": ["a", "b"],
-                "transitions": [
-                    "q0|a|q1|",
-                    "q1|b|q2",
-                ],
-                "initial_state": "q0",
-                "accept_states": ["q2"]
-            }
-        }
+
+    # class Config:
+    #     schema_extra = {
+    #         "example": {
+    #             "states": ["q0", "q1", "q2"],
+    #             "alphabet": ["a", "b"],
+    #             "transitions": [
+    #                 "q0|a|q1|",
+    #                 "q1|b|q2",
+    #             ],
+    #             "initial_state": "q0",
+    #             "accept_states": ["q2"]
+    #         }
+    #     }
 
     def toFSA(self) -> FSA:
         transitions: List[Transition] = []

@@ -8,7 +8,7 @@ import pytest
 from evaluation_function.schemas import ValidationError, ErrorCode
 from evaluation_function.schemas.utils import make_fsa
 from evaluation_function.schemas.result import Result, FSAFeedback
-from evaluation_function.correction import analyze_fsa_correction, check_minimality
+from evaluation_function.correction import analyze_fsa_correction
 
 
 # =============================================================================
@@ -136,35 +136,6 @@ class TestInvalidFsas:
         )
         result = analyze_fsa_correction(invalid, invalid)
         assert result.is_correct is False
-
-
-# =============================================================================
-# Test Minimality
-# =============================================================================
-
-class TestCheckMinimality:
-    """Test check_minimality function."""
-
-    def test_minimal_dfa(self, dfa_accepts_a):
-        assert check_minimality(dfa_accepts_a) is True
-
-    def test_non_minimal_dfa_with_unreachable(self):
-        non_minimal = make_fsa(
-            states=["q0", "q1", "q2", "unreachable"],
-            alphabet=["a", "b"],
-            transitions=[
-                {"from_state": "q0", "to_state": "q1", "symbol": "a"},
-                {"from_state": "q0", "to_state": "q2", "symbol": "b"},
-                {"from_state": "q1", "to_state": "q2", "symbol": "a"},
-                {"from_state": "q1", "to_state": "q2", "symbol": "b"},
-                {"from_state": "q2", "to_state": "q2", "symbol": "a"},
-                {"from_state": "q2", "to_state": "q2", "symbol": "b"},
-                {"from_state": "unreachable", "to_state": "unreachable", "symbol": "a"},
-            ],
-            initial="q0",
-            accept=["q1"]
-        )
-        assert check_minimality(non_minimal) is False
 
 
 class TestAnalyzeFsaCorrectionMinimality:

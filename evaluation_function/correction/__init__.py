@@ -9,10 +9,8 @@ Exports:
 
 from .correction import (
     analyze_fsa_correction,
-    check_minimality,
 )
 
 __all__ = [
     "analyze_fsa_correction",
-    "check_minimality",
 ]

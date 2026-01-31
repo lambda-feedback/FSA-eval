@@ -4,9 +4,10 @@ Result Schema
 Extended result schema with structured feedback for UI highlighting.
 """
 
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, TypeVar, Generic
 from enum import Enum
 from pydantic import BaseModel, Field
+from pydantic.generics import GenericModel
 
 from evaluation_function.schemas.fsa import FSA
 
@@ -135,6 +136,24 @@ class ValidationError(BaseModel):
         description="Actionable suggestion for fixing the error"
     )
 
+T = TypeVar("T")
+
+
+class ValidationResult(GenericModel, Generic[T]):
+    value: Optional[T] = None
+    errors: List[ValidationError] = []
+
+    @property
+    def ok(self) -> bool:
+        return not self.errors
+
+    @classmethod
+    def success(cls, value: T) -> "ValidationResult[T]":
+        return cls(value=value, errors=[])
+
+    @classmethod
+    def failure(cls, value: T, errors: List[ValidationError]) -> "ValidationResult[T]":
+        return cls(value=value, errors=errors)
 
 class TestResult(BaseModel):
     """

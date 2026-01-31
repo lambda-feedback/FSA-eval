@@ -1,15 +1,17 @@
-from typing import Any
+from typing import Any, Tuple
 from lf_toolkit.evaluation import Result as LFResult
+
+from evaluation_function.schemas.params import Params
 from .schemas import FSA, FSAFrontend
 from .schemas.result import Result
 from .correction import analyze_fsa_correction
 import json
 
-def validate_fsa(value: str | dict) -> FSA:
+def validate_fsa(value: str | dict) -> Tuple[FSA, Params]:
     """Parse a FSA from JSON string or dict."""
     if isinstance(value, str):
         return FSAFrontend.model_validate_json(value).toFSA()
-    return FSAFrontend.model_validate(value).toFSA(), FSAFrontend.model_validate(value).config
+    return FSAFrontend.model_validate(value).toFSA(), json.loads(FSAFrontend.model_validate(value).config)
 
 def evaluation_function(
     response: Any = None,
@@ -34,21 +36,11 @@ def evaluation_function(
                 f"response: {response}\nanswer: {answer}"
             )
         # Parse FSAs
-        student_fsa, student_config = validate_fsa(response)
+        student_fsa, _ = validate_fsa(response)
         expected_fsa, expected_config = validate_fsa(answer)
 
-        require_minimal = params.get("require_minimal", False) if isinstance(params, dict) else False
-
         # Run correction pipeline
-        result: Result = analyze_fsa_correction(student_fsa, expected_fsa, require_minimal)
-        return LFResult(
-            is_correct=False,
-            feedback_items=[(
-                "error",
-                f"Invalid FSA format: {str(e)}\n\n"
-                f"response: {response}\nanswer: {answer}\nparams: {params}\n\nstudent config:{student_config}\n\nexpected config:{expected_config}"
-            )]
-        )
+        result: Result = analyze_fsa_correction(student_fsa, expected_fsa, expected_config)
 
         # Return LFResult
         return LFResult(
