@@ -30,7 +30,6 @@ def evaluation_function(
         is_correct=False,
         feedback_items=[(
             "error",
-            f"Invalid FSA format: {str(e)}\n\n"
             f"response: {response}\nanswer: {answer}\nparams: {params}"
         )]
     )
