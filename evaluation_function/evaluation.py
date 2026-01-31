@@ -3,6 +3,7 @@ from lf_toolkit.evaluation import Result as LFResult
 from .schemas import FSA, FSAFrontend
 from .schemas.result import Result
 from .correction import analyze_fsa_correction
+import json
 
 def validate_fsa(value: str | dict) -> FSA:
     """Parse a FSA from JSON string or dict."""
@@ -27,34 +28,34 @@ def evaluation_function(
         LFResult with is_correct and feedback_items
     """
     try:
-        # TEMPORARY WORKAROUND: Extract from params if not passed directly
-        if params is None:
-            params = {}
-
-        if isinstance(params, dict):
-            raw_response = response or params.get("response") or {}
-            raw_answer = answer or params.get("answer") or {}
-            extra_params = params.get("params") or {}
-        else:
-            # If params is not a dict, fallback to empty dict
-            raw_response = response
-            raw_answer = answer
-            extra_params = {}
-
-        if not raw_response or not raw_answer:
+        if not response or not answer:
             raise ValueError(
                 f"Missing FSA data: response or answer is None\n"
-                f"raw_response: {raw_response}\nraw_answer: {raw_answer}"
+                f"response: {response}\nanswer: {answer}"
             )
+        # Extract and remove config from answer
+        raw_config = "{}"
+        if isinstance(answer, dict):
+            raw_config = answer.pop("config", "{}")
+
+        config = json.loads(raw_config)
 
         # Parse FSAs
-        student_fsa = validate_fsa(raw_response)
-        expected_fsa = validate_fsa(raw_answer)
+        student_fsa = validate_fsa(response)
+        expected_fsa = validate_fsa(answer)
 
-        require_minimal = extra_params.get("require_minimal", False) if isinstance(extra_params, dict) else False
+        require_minimal = params.get("require_minimal", False) if isinstance(params, dict) else False
 
         # Run correction pipeline
         result: Result = analyze_fsa_correction(student_fsa, expected_fsa, require_minimal)
+        return LFResult(
+            is_correct=False,
+            feedback_items=[(
+                "error",
+                f"Invalid FSA format: {str(e)}\n\n"
+                f"response: {response}\nanswer: {answer}\nparams: {params}\n\nconfig:{config}"
+            )]
+        )
 
         # Return LFResult
         return LFResult(
