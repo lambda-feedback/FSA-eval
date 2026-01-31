@@ -28,7 +28,6 @@ def evaluation_function(
     """
     try:
         # TEMPORARY WORKAROUND: Extract from params if not passed directly
-        
         if params is None:
             params = {}
 
@@ -60,7 +59,7 @@ def evaluation_function(
         # Return LFResult
         return LFResult(
             is_correct=result.is_correct,
-            feedback_items=[("result", result.feedback), ("errors", result.fsa_feedback.model_dump_json()), ("input", {"answer": answer, "response": response, "params": params})]
+            feedback_items=[("result", result.feedback), ("errors", result.fsa_feedback.model_dump_json())]
         )
 
     except Exception as e:
