@@ -11,7 +11,7 @@ def validate_fsa(value: str | dict) -> Tuple[FSA, Params]:
     """Parse a FSA from JSON string or dict."""
     if isinstance(value, str):
         return FSAFrontend.model_validate_json(value).toFSA()
-    return FSAFrontend.model_validate(value).toFSA(), json.loads(FSAFrontend.model_validate(value).config)
+    return FSAFrontend.model_validate(value).toFSA(), Params.model_validate_json(FSAFrontend.model_validate(value).config)
 
 def evaluation_function(
     response: Any = None,
