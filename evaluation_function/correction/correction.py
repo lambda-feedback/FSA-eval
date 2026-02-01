@@ -231,11 +231,10 @@ def analyze_fsa_correction(
     else:
         summary = (
             _summarize_errors(equivalence_errors)
-            if equivalence_errors
+            if len(equivalence_errors) > 0
             else "Your FSA has some issues to address."
         )
         feedback = summary
-    print(equivalence_errors)
 
     # -------------------------------------------------------------------------
     # Step 11: Return result
