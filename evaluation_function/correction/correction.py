@@ -213,9 +213,16 @@ def analyze_fsa_correction(
     # Step 9: Decide correctness based on evaluation mode
     # -------------------------------------------------------------------------
     if params.evaluation_mode == "strict":
-        is_correct = validation_result is not None and validation_result.ok and equivalence_result.ok and iso_result.ok
+        is_correct = (
+            (not params.check_minimality or validation_result.ok)
+            and equivalence_result.ok
+            and iso_result.ok
+        )
     elif params.evaluation_mode == "lenient":
-        is_correct = validation_result is not None and validation_result.ok and equivalence_result.ok
+        is_correct = (
+            (not params.check_minimality or validation_result.ok)
+            and equivalence_result.ok
+        )
     else:  # partial # I dont know what the partial is meant for, always mark as incorrect?
         is_correct = False
 
