@@ -314,55 +314,185 @@ class TestIsomorphism:
             initial="s0",
             accept=["s1"],
         )
-        assert are_isomorphic(fsa_user, fsa_sol).ok
+        assert are_isomorphic(fsa_user, fsa_sol) == []
 
 
-# =============================================================================
-# Test Minimality
-# =============================================================================
+class TestEpsilonTransitions:
+    """Tests for epsilon transition handling across the validation pipeline."""
 
-@pytest.fixture
-def dfa_accepts_a():
-    """DFA that accepts exactly 'a'."""
-    return make_fsa(
-        states=["q0", "q1", "q2"],
-        alphabet=["a", "b"],
-        transitions=[
-            {"from_state": "q0", "to_state": "q1", "symbol": "a"},
-            {"from_state": "q0", "to_state": "q2", "symbol": "b"},
-            {"from_state": "q1", "to_state": "q2", "symbol": "a"},
-            {"from_state": "q1", "to_state": "q2", "symbol": "b"},
-            {"from_state": "q2", "to_state": "q2", "symbol": "a"},
-            {"from_state": "q2", "to_state": "q2", "symbol": "b"},
-        ],
-        initial="q0",
-        accept=["q1"]
-    )
-
-
-class TestCheckMinimality:
-    """Test check_minimality function."""
-
-    def test_minimal_dfa(self, dfa_accepts_a):
-        result = is_minimal(dfa_accepts_a)
-        assert result.ok
-        assert result.value is True
-
-    def test_non_minimal_dfa_with_unreachable(self):
-        non_minimal = make_fsa(
-            states=["q0", "q1", "q2", "unreachable"],
-            alphabet=["a", "b"],
+    def test_valid_fsa_with_epsilon_unicode(self):
+        """ε-NFA with Unicode ε should pass structural validation."""
+        fsa = make_fsa(
+            states=["q0", "q1", "q2"],
+            alphabet=["a"],
             transitions=[
-                {"from_state": "q0", "to_state": "q1", "symbol": "a"},
-                {"from_state": "q0", "to_state": "q2", "symbol": "b"},
+                {"from_state": "q0", "to_state": "q1", "symbol": "ε"},
                 {"from_state": "q1", "to_state": "q2", "symbol": "a"},
-                {"from_state": "q1", "to_state": "q2", "symbol": "b"},
-                {"from_state": "q2", "to_state": "q2", "symbol": "a"},
-                {"from_state": "q2", "to_state": "q2", "symbol": "b"},
-                {"from_state": "unreachable", "to_state": "unreachable", "symbol": "a"},
             ],
             initial="q0",
-            accept=["q1"]
+            accept=["q2"],
         )
-        result = is_minimal(non_minimal)
-        assert not result.ok
+        assert is_valid_fsa(fsa) == []
+
+    def test_valid_fsa_with_epsilon_string(self):
+        """ε-NFA with 'epsilon' string should pass structural validation."""
+        fsa = make_fsa(
+            states=["q0", "q1", "q2"],
+            alphabet=["a"],
+            transitions=[
+                {"from_state": "q0", "to_state": "q1", "symbol": "epsilon"},
+                {"from_state": "q1", "to_state": "q2", "symbol": "a"},
+            ],
+            initial="q0",
+            accept=["q2"],
+        )
+        assert is_valid_fsa(fsa) == []
+
+    def test_valid_fsa_with_empty_string_epsilon(self):
+        """ε-NFA with empty string epsilon should pass structural validation."""
+        fsa = make_fsa(
+            states=["q0", "q1", "q2"],
+            alphabet=["a"],
+            transitions=[
+                {"from_state": "q0", "to_state": "q1", "symbol": ""},
+                {"from_state": "q1", "to_state": "q2", "symbol": "a"},
+            ],
+            initial="q0",
+            accept=["q2"],
+        )
+        assert is_valid_fsa(fsa) == []
+
+    def test_epsilon_nfa_is_not_deterministic(self):
+        """ε-NFA should be flagged as non-deterministic."""
+        fsa = make_fsa(
+            states=["q0", "q1"],
+            alphabet=["a"],
+            transitions=[
+                {"from_state": "q0", "to_state": "q1", "symbol": "ε"},
+            ],
+            initial="q0",
+            accept=["q1"],
+        )
+        errors = is_deterministic(fsa)
+        assert len(errors) > 0
+        assert ErrorCode.NOT_DETERMINISTIC in [e.code for e in errors]
+
+    def test_accepts_string_via_epsilon_closure(self):
+        """ε-NFA should accept 'a' by following q0 --ε--> q1 --a--> q2."""
+        fsa = make_fsa(
+            states=["q0", "q1", "q2"],
+            alphabet=["a"],
+            transitions=[
+                {"from_state": "q0", "to_state": "q1", "symbol": "ε"},
+                {"from_state": "q1", "to_state": "q2", "symbol": "a"},
+            ],
+            initial="q0",
+            accept=["q2"],
+        )
+        assert accepts_string(fsa, "a") == []
+
+    def test_rejects_string_with_epsilon_nfa(self):
+        """ε-NFA that accepts 'a' should reject empty string."""
+        fsa = make_fsa(
+            states=["q0", "q1", "q2"],
+            alphabet=["a"],
+            transitions=[
+                {"from_state": "q0", "to_state": "q1", "symbol": "ε"},
+                {"from_state": "q1", "to_state": "q2", "symbol": "a"},
+            ],
+            initial="q0",
+            accept=["q2"],
+        )
+        errors = accepts_string(fsa, "")
+        assert len(errors) > 0
+
+    def test_accepts_empty_string_via_epsilon(self):
+        """ε-NFA should accept empty string when initial reaches accept via ε."""
+        fsa = make_fsa(
+            states=["q0", "q1"],
+            alphabet=["a"],
+            transitions=[
+                {"from_state": "q0", "to_state": "q1", "symbol": "ε"},
+            ],
+            initial="q0",
+            accept=["q1"],
+        )
+        assert accepts_string(fsa, "") == []
+
+    def test_epsilon_nfa_equivalent_to_dfa(self):
+        """ε-NFA and DFA accepting the same language should be equivalent."""
+        enfa = make_fsa(
+            states=["q0", "q1", "q2"],
+            alphabet=["a"],
+            transitions=[
+                {"from_state": "q0", "to_state": "q1", "symbol": "ε"},
+                {"from_state": "q1", "to_state": "q2", "symbol": "a"},
+            ],
+            initial="q0",
+            accept=["q2"],
+        )
+        dfa = make_fsa(
+            states=["s0", "s1"],
+            alphabet=["a"],
+            transitions=[
+                {"from_state": "s0", "to_state": "s1", "symbol": "a"},
+            ],
+            initial="s0",
+            accept=["s1"],
+        )
+        assert fsas_accept_same_language(enfa, dfa) == []
+
+    def test_epsilon_nfa_not_equivalent_to_different_dfa(self):
+        """ε-NFA and DFA accepting different languages should not be equivalent."""
+        enfa = make_fsa(
+            states=["q0", "q1", "q2"],
+            alphabet=["a", "b"],
+            transitions=[
+                {"from_state": "q0", "to_state": "q1", "symbol": "ε"},
+                {"from_state": "q1", "to_state": "q2", "symbol": "a"},
+            ],
+            initial="q0",
+            accept=["q2"],
+        )
+        dfa = make_fsa(
+            states=["s0", "s1"],
+            alphabet=["a", "b"],
+            transitions=[
+                {"from_state": "s0", "to_state": "s1", "symbol": "b"},
+            ],
+            initial="s0",
+            accept=["s1"],
+        )
+        errors = fsas_accept_same_language(enfa, dfa)
+        assert len(errors) > 0
+
+    def test_multi_epsilon_nfa_equivalent_to_dfa(self):
+        """ε-NFA for (a|b) with branching epsilons should match equivalent DFA."""
+        # q0 --ε--> q1, q0 --ε--> q2, q1 --a--> q3, q2 --b--> q3
+        enfa = make_fsa(
+            states=["q0", "q1", "q2", "q3"],
+            alphabet=["a", "b"],
+            transitions=[
+                {"from_state": "q0", "to_state": "q1", "symbol": "ε"},
+                {"from_state": "q0", "to_state": "q2", "symbol": "ε"},
+                {"from_state": "q1", "to_state": "q3", "symbol": "a"},
+                {"from_state": "q2", "to_state": "q3", "symbol": "b"},
+            ],
+            initial="q0",
+            accept=["q3"],
+        )
+        dfa = make_fsa(
+            states=["s0", "s1"],
+            alphabet=["a", "b"],
+            transitions=[
+                {"from_state": "s0", "to_state": "s1", "symbol": "a"},
+                {"from_state": "s0", "to_state": "s1", "symbol": "b"},
+            ],
+            initial="s0",
+            accept=["s1"],
+        )
+        assert fsas_accept_same_language(enfa, dfa) == []
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

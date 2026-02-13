@@ -3,6 +3,8 @@ from collections import deque
 
 from evaluation_function.schemas.result import StructuralInfo
 from ..algorithms.minimization import hopcroft_minimization
+from ..algorithms.nfa_to_dfa import nfa_to_dfa, is_deterministic as is_dfa_check
+from ..algorithms.epsilon_closure import epsilon_closure_set, build_epsilon_transition_map
 from ..schemas import FSA, ValidationError, ErrorCode, ElementHighlight, ValidationResult
 
 
@@ -92,7 +94,7 @@ def is_valid_fsa(fsa: FSA) -> ValidationResult[bool]:
                     )
                 )
             )
-        if t.symbol not in alphabet:
+        if t.symbol not in alphabet and t.symbol not in ("ε", "epsilon", ""):
             errors.append(
                 ValidationError(
                     message=f"Symbol '{t.symbol}' not in alphabet.",
@@ -125,6 +127,31 @@ def is_deterministic(fsa: FSA) -> ValidationResult[bool]:
 
     errors: List[ValidationError] = []
     seen = set()
+    
+    # First check if FSA is structurally valid
+    structural_errors = is_valid_fsa(fsa)
+    if structural_errors:
+        return structural_errors
+    
+    # Check for epsilon transitions (makes FSA non-deterministic)
+    for t in fsa.transitions:
+        if t.symbol in ("ε", "epsilon", ""):
+            errors.append(
+                ValidationError(
+                    message=f"Your FSA has an epsilon (ε) transition from '{t.from_state}' to '{t.to_state}'. A DFA cannot have epsilon transitions.",
+                    code=ErrorCode.NOT_DETERMINISTIC,
+                    severity="error",
+                    highlight=ElementHighlight(
+                        type="transition",
+                        from_state=t.from_state,
+                        to_state=t.to_state,
+                        symbol=t.symbol
+                    ),
+                    suggestion="Remove epsilon transitions to make this a DFA, or note that your FSA is an NFA/ε-NFA, which is also valid!"
+                )
+            )
+    if errors:
+        return errors
 
     for t in fsa.transitions:
         key = (t.from_state, t.symbol)
@@ -143,6 +170,8 @@ def is_deterministic(fsa: FSA) -> ValidationResult[bool]:
                 )
             )
         seen.add(key)
+
+    return errors
 
     return (
         ValidationResult.success(True)
@@ -287,7 +316,21 @@ def accepts_string(fsa: FSA, string: str) -> ValidationResult[bool]:
     if not valid.ok:
         return valid
 
-    current_states: Set[str] = {fsa.initial_state}
+def accepts_string(fsa: FSA, string: str) -> List[ValidationError]:
+    """
+    Simulate the FSA on a string, with full ε-transition support.
+    Returns [] if accepted, else a ValidationError.
+    """
+    # First check if FSA is structurally valid
+    structural_errors = is_valid_fsa(fsa)
+    if structural_errors:
+        return structural_errors
+
+    # Build epsilon transition map for ε-closure computation
+    epsilon_trans = build_epsilon_transition_map(fsa.transitions)
+
+    # Start with ε-closure of the initial state
+    current_states: Set[str] = epsilon_closure_set({fsa.initial_state}, epsilon_trans)
 
     for symbol in string:
         if symbol not in fsa.alphabet:
@@ -297,19 +340,21 @@ def accepts_string(fsa: FSA, string: str) -> ValidationResult[bool]:
                     code=ErrorCode.INVALID_SYMBOL,
                     severity="error"
                 )
-            ])
+            ]
 
-        next_states = {
-            t.to_state
-            for s in current_states
-            for t in fsa.transitions
-            if t.from_state == s and t.symbol == symbol
-        }
+        next_states = set()
+        for state in current_states:
+            for t in fsa.transitions:
+                if t.from_state == state and t.symbol == symbol:
+                    next_states.add(t.to_state)
 
-        if not next_states:
-            return ValidationResult.failure(False, [
+        # Compute ε-closure of the states reached after reading the symbol
+        current_states = epsilon_closure_set(next_states, epsilon_trans)
+
+        if not current_states:
+            return [
                 ValidationError(
-                    message=f"String '{string}' rejected.",
+                    message=f"String '{string}' rejected: no transition on symbol '{symbol}'",
                     code=ErrorCode.TEST_CASE_FAILED,
                     severity="error"
                 )
@@ -346,7 +391,57 @@ def fsas_accept_same_string(fsa1: FSA, fsa2: FSA, string: str) -> ValidationResu
                 code=ErrorCode.LANGUAGE_MISMATCH,
                 severity="error"
             )
-        ])
+        ]
+    return []
+
+
+def fsas_accept_same_language(fsa1: FSA, fsa2: FSA) -> List[ValidationError]:
+    # Convert NFA/ε-NFA to DFA before minimization (Hopcroft requires DFA input)
+    if not is_dfa_check(fsa1):
+        fsa1 = nfa_to_dfa(fsa1)
+    if not is_dfa_check(fsa2):
+        fsa2 = nfa_to_dfa(fsa2)
+
+    fsa1_min = hopcroft_minimization(fsa1)
+    fsa2_min = hopcroft_minimization(fsa2)
+    return are_isomorphic(fsa1_min, fsa2_min)
+    # """
+    # Approximate check for language equivalence by testing all strings up to max_length.
+    # Returns [] if equivalent, else a ValidationError.
+    # """
+    # errors = []
+
+    # if set(fsa1.alphabet) != set(fsa2.alphabet):
+    #     errors.append(
+    #         ValidationError(
+    #             message=f"Alphabets of FSAs differ: FSA1 alphabet = {set(fsa1.alphabet)}, FSA2 alphabet = {set(fsa2.alphabet)}",
+    #             code=ErrorCode.LANGUAGE_MISMATCH,
+    #             severity="error"
+    #         )
+    #     )
+    #     return errors
+
+    # alphabet = fsa1.alphabet
+    
+    # # Check empty string
+    # empty_string_error = fsas_accept_same_string(fsa1, fsa2, "")
+    # if empty_string_error:
+    #     return empty_string_error
+    
+    # for length in range(1, max_length + 1):
+    #     for s in product(alphabet, repeat=length):
+    #         string = ''.join(s)
+    #         err = fsas_accept_same_string(fsa1, fsa2, string)
+    #         if err:
+    #             errors.append(
+    #                 ValidationError(
+    #                     message=f"FSAs differ on string '{string}' of length {length}",
+    #                     code=ErrorCode.LANGUAGE_MISMATCH,
+    #                     severity="error"
+    #                 )
+    #             )
+    #             return errors  # stop at first counterexample
+    # return errors
 
     return ValidationResult.success(True)
 
