@@ -214,7 +214,19 @@ class TestAnalyzeFsaCorrectionMinimality:
 class TestEpsilonTransitionCorrection:
     """Test the full correction pipeline with ε-NFA inputs."""
 
-    def test_epsilon_nfa_vs_equivalent_dfa_correct(self):
+    @pytest.fixture
+    def nfa_params(self):
+        """Params that allow NFA/ε-NFA student submissions."""
+        return Params(
+            expected_type="any",
+            check_completeness=False,
+            check_minimality=False,
+            evaluation_mode="lenient",
+            highlight_errors=True,
+            feedback_verbosity="detailed",
+        )
+
+    def test_epsilon_nfa_vs_equivalent_dfa_correct(self, nfa_params):
         """ε-NFA student answer equivalent to DFA expected should be correct."""
         # ε-NFA accepts exactly "a": q0 --ε--> q1 --a--> q2
         student_enfa = make_fsa(
@@ -237,11 +249,11 @@ class TestEpsilonTransitionCorrection:
             initial="s0",
             accept=["s1"],
         )
-        result = analyze_fsa_correction(student_enfa, expected_dfa)
+        result = analyze_fsa_correction(student_enfa, expected_dfa, nfa_params)
         assert isinstance(result, Result)
         assert result.is_correct is True
 
-    def test_epsilon_nfa_vs_different_dfa_incorrect(self):
+    def test_epsilon_nfa_vs_different_dfa_incorrect(self, nfa_params):
         """ε-NFA accepting 'a' vs DFA accepting 'b' should be incorrect."""
         student_enfa = make_fsa(
             states=["q0", "q1", "q2"],
@@ -262,13 +274,13 @@ class TestEpsilonTransitionCorrection:
             initial="s0",
             accept=["s1"],
         )
-        result = analyze_fsa_correction(student_enfa, expected_dfa)
+        result = analyze_fsa_correction(student_enfa, expected_dfa, nfa_params)
         assert isinstance(result, Result)
         assert result.is_correct is False
         assert result.fsa_feedback is not None
         assert len(result.fsa_feedback.errors) > 0
 
-    def test_multi_epsilon_nfa_vs_dfa_correct(self):
+    def test_multi_epsilon_nfa_vs_dfa_correct(self, nfa_params):
         """ε-NFA for (a|b) with branching epsilons should match equivalent DFA."""
         student_enfa = make_fsa(
             states=["q0", "q1", "q2", "q3"],
@@ -292,11 +304,11 @@ class TestEpsilonTransitionCorrection:
             initial="s0",
             accept=["s1"],
         )
-        result = analyze_fsa_correction(student_enfa, expected_dfa)
+        result = analyze_fsa_correction(student_enfa, expected_dfa, nfa_params)
         assert isinstance(result, Result)
         assert result.is_correct is True
 
-    def test_epsilon_nfa_structural_info_reports_nondeterministic(self):
+    def test_epsilon_nfa_structural_info_reports_nondeterministic(self, nfa_params):
         """ε-NFA should have structural info reporting non-deterministic."""
         student_enfa = make_fsa(
             states=["q0", "q1", "q2"],
@@ -317,7 +329,7 @@ class TestEpsilonTransitionCorrection:
             initial="s0",
             accept=["s1"],
         )
-        result = analyze_fsa_correction(student_enfa, expected_dfa)
+        result = analyze_fsa_correction(student_enfa, expected_dfa, nfa_params)
         assert result.fsa_feedback is not None
         assert result.fsa_feedback.structural is not None
         assert result.fsa_feedback.structural.is_deterministic is False
