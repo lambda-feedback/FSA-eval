@@ -18,7 +18,7 @@ __all__ = [
     "Params",
     # Result
     "Result",
-    "ValidationResult"
+    "ValidationResult",
     "ValidationError",
     "ElementHighlight",
     "ErrorCode",

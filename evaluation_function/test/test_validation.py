@@ -314,7 +314,7 @@ class TestIsomorphism:
             initial="s0",
             accept=["s1"],
         )
-        assert are_isomorphic(fsa_user, fsa_sol) == []
+        assert are_isomorphic(fsa_user, fsa_sol).ok
 
 
 class TestEpsilonTransitions:
@@ -332,7 +332,7 @@ class TestEpsilonTransitions:
             initial="q0",
             accept=["q2"],
         )
-        assert is_valid_fsa(fsa) == []
+        assert is_valid_fsa(fsa).ok
 
     def test_valid_fsa_with_epsilon_string(self):
         """ε-NFA with 'epsilon' string should pass structural validation."""
@@ -346,7 +346,7 @@ class TestEpsilonTransitions:
             initial="q0",
             accept=["q2"],
         )
-        assert is_valid_fsa(fsa) == []
+        assert is_valid_fsa(fsa).ok
 
     def test_valid_fsa_with_empty_string_epsilon(self):
         """ε-NFA with empty string epsilon should pass structural validation."""
@@ -360,7 +360,7 @@ class TestEpsilonTransitions:
             initial="q0",
             accept=["q2"],
         )
-        assert is_valid_fsa(fsa) == []
+        assert is_valid_fsa(fsa).ok
 
     def test_epsilon_nfa_is_not_deterministic(self):
         """ε-NFA should be flagged as non-deterministic."""
@@ -373,9 +373,9 @@ class TestEpsilonTransitions:
             initial="q0",
             accept=["q1"],
         )
-        errors = is_deterministic(fsa)
-        assert len(errors) > 0
-        assert ErrorCode.NOT_DETERMINISTIC in [e.code for e in errors]
+        result = is_deterministic(fsa)
+        assert not result.ok
+        assert ErrorCode.NOT_DETERMINISTIC in [e.code for e in result.errors]
 
     def test_accepts_string_via_epsilon_closure(self):
         """ε-NFA should accept 'a' by following q0 --ε--> q1 --a--> q2."""
@@ -389,7 +389,7 @@ class TestEpsilonTransitions:
             initial="q0",
             accept=["q2"],
         )
-        assert accepts_string(fsa, "a") == []
+        assert accepts_string(fsa, "a").ok
 
     def test_rejects_string_with_epsilon_nfa(self):
         """ε-NFA that accepts 'a' should reject empty string."""
@@ -403,8 +403,8 @@ class TestEpsilonTransitions:
             initial="q0",
             accept=["q2"],
         )
-        errors = accepts_string(fsa, "")
-        assert len(errors) > 0
+        result = accepts_string(fsa, "")
+        assert not result.ok
 
     def test_accepts_empty_string_via_epsilon(self):
         """ε-NFA should accept empty string when initial reaches accept via ε."""
@@ -417,7 +417,7 @@ class TestEpsilonTransitions:
             initial="q0",
             accept=["q1"],
         )
-        assert accepts_string(fsa, "") == []
+        assert accepts_string(fsa, "").ok
 
     def test_epsilon_nfa_equivalent_to_dfa(self):
         """ε-NFA and DFA accepting the same language should be equivalent."""
@@ -440,7 +440,7 @@ class TestEpsilonTransitions:
             initial="s0",
             accept=["s1"],
         )
-        assert fsas_accept_same_language(enfa, dfa) == []
+        assert fsas_accept_same_language(enfa, dfa).ok
 
     def test_epsilon_nfa_not_equivalent_to_different_dfa(self):
         """ε-NFA and DFA accepting different languages should not be equivalent."""
@@ -463,8 +463,8 @@ class TestEpsilonTransitions:
             initial="s0",
             accept=["s1"],
         )
-        errors = fsas_accept_same_language(enfa, dfa)
-        assert len(errors) > 0
+        result = fsas_accept_same_language(enfa, dfa)
+        assert not result.ok
 
     def test_multi_epsilon_nfa_equivalent_to_dfa(self):
         """ε-NFA for (a|b) with branching epsilons should match equivalent DFA."""
@@ -491,7 +491,7 @@ class TestEpsilonTransitions:
             initial="s0",
             accept=["s1"],
         )
-        assert fsas_accept_same_language(enfa, dfa) == []
+        assert fsas_accept_same_language(enfa, dfa).ok
 
 
 if __name__ == "__main__":
