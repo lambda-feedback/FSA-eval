@@ -1,69 +1,60 @@
-from typing import Any
-from lf_toolkit.evaluation import Result as LFResult, Params
+from typing import Any, Tuple
+from lf_toolkit.evaluation import Result as LFResult
 
-# note: this file is a temperary workaround, if the frontend -> backend communication succeed, fix this file
-
-from .schemas import FSA#, FSAFrontend
+from evaluation_function.schemas.params import Params
+from .schemas import FSA, FSAFrontend
 from .schemas.result import Result
 from .correction import analyze_fsa_correction
+import json
 
-# def evaluation_function(
-#     payload: Any
-# ) -> LFResult:
-#   return LFResult(
-#     is_correct=False,
-#         feedback_items=[("error", f"{payload}")]
-#     )
-
-def validate_fsa(value: str | dict) -> FSA:
+def validate_fsa(value: str | dict) -> Tuple[FSA, Params]:
+    """Parse a FSA from JSON string or dict."""
     if isinstance(value, str):
-        return FSA.model_validate_json(value)
-    return FSA.model_validate(value)
+        return FSAFrontend.model_validate_json(value).toFSA()
+    return FSAFrontend.model_validate(value).toFSA(), Params.model_validate_json(FSAFrontend.model_validate(value).config)
 
 def evaluation_function(
-    response: Any,
-    answer: Any,
-    params: Params,
+    response: Any = None,
+    answer: Any = None,
+    params: Any = None  # Temp workaround: treat params as Any
 ) -> LFResult:
     """
-    Evaluate a student's FSA response against the expected answer.
+    Temporary FSA evaluation function.
     
     Args:
-        response: Student's FSA (dict with states, alphabet, transitions, etc.), since frontend constriants, this is FSAFrontend
-        answer: Expected FSA still, FSAFrontend for the same reason
-        params: Extra parameters (e.g., require_minimal)
+        response: Student's FSA (may be None if frontend wraps everything in params)
+        answer: Expected FSA (may be None)
+        params: Additional parameters (or full payload if frontend wraps everything here)
     
     Returns:
-        LFResult with is_correct and feedback
+        LFResult with is_correct and feedback_items
     """
     try:
-        # Parse FSAs from input
-        # student_fsa_ = FSAFrontend.model_validate(response)
-        # expected_fsa_ = FSAFrontend.model_validate(answer)
+        if not response or not answer:
+            raise ValueError(
+                f"Missing FSA data: response or answer is None\n"
+                f"response: {response}\nanswer: {answer}"
+            )
+        # Parse FSAs
+        student_fsa, _ = validate_fsa(response)
+        expected_fsa, expected_config = validate_fsa(answer)
 
-        # student_fsa = student_fsa_.from_flattened()
-        # expected_fsa = expected_fsa_.from_flattened()
-
-        # as a temporary workaround we assume the response and answer are all valid json strings
-        student_fsa = validate_fsa(response)
-        expected_fsa = validate_fsa(answer)
-
-
-        
-        # Get require_minimal from params if present
-        require_minimal = params.get("require_minimal", False) if hasattr(params, "get") else False
-        
         # Run correction pipeline
-        result: Result = analyze_fsa_correction(student_fsa, expected_fsa, require_minimal)
-        
-        # Convert to lf_toolkit Result
+        result: Result = analyze_fsa_correction(student_fsa, expected_fsa, expected_config)
+
+        # Return LFResult
         return LFResult(
             is_correct=result.is_correct,
-            feedback_items=[("feedback", result.feedback)]
+            feedback_items=[("result", result.feedback), ("errors", result.fsa_feedback.model_dump_json())]
         )
-        
+
     except Exception as e:
+        # Always return LFResult with raw payload for debugging
         return LFResult(
             is_correct=False,
-            feedback_items=[("error", f"Invalid FSA format: {str(e)}, received: \n\nresponse: {response}\n\n answer: {answer}, \n\nparams: {params}")]
+            feedback_items=[(
+                "error",
+                f"Invalid FSA format: {str(e)}\n\n"
+                f"response: {response}\nanswer: {answer}\nparams: {params}"
+            )]
         )

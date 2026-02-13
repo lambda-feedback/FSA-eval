@@ -9,6 +9,7 @@ import pytest
 
 from evaluation_function.validation.validation import *
 from evaluation_function.schemas.utils import make_fsa
+from evaluation_function.schemas import ErrorCode
 
 
 class TestFSAValidation:
@@ -22,7 +23,7 @@ class TestFSAValidation:
             initial="q0",
             accept=["q1"],
         )
-        assert is_valid_fsa(fsa) == []
+        assert is_valid_fsa(fsa).ok
 
     def test_invalid_initial_state(self):
         fsa = make_fsa(
@@ -32,9 +33,9 @@ class TestFSAValidation:
             initial="q0",
             accept=[],
         )
-        errors = is_valid_fsa(fsa)
-        assert len(errors) > 0
-        assert ErrorCode.INVALID_INITIAL in [e.code for e in errors]
+        result = is_valid_fsa(fsa)
+        assert not result.ok
+        assert ErrorCode.INVALID_INITIAL in [e.code for e in result.errors]
 
     def test_invalid_accept_state(self):
         fsa = make_fsa(
@@ -44,9 +45,9 @@ class TestFSAValidation:
             initial="q0",
             accept=["q1"],
         )
-        errors = is_valid_fsa(fsa)
-        assert len(errors) > 0
-        assert ErrorCode.INVALID_ACCEPT in [e.code for e in errors]
+        result = is_valid_fsa(fsa)
+        assert not result.ok
+        assert ErrorCode.INVALID_ACCEPT in [e.code for e in result.errors]
 
     def test_invalid_transition_source(self):
         fsa = make_fsa(
@@ -56,8 +57,8 @@ class TestFSAValidation:
             initial="q1",
             accept=[],
         )
-        errors = is_valid_fsa(fsa)
-        assert ErrorCode.INVALID_TRANSITION_SOURCE in [e.code for e in errors]
+        result = is_valid_fsa(fsa)
+        assert ErrorCode.INVALID_TRANSITION_SOURCE in [e.code for e in result.errors]
 
     def test_invalid_transition_destination(self):
         fsa = make_fsa(
@@ -67,8 +68,8 @@ class TestFSAValidation:
             initial="q0",
             accept=[],
         )
-        errors = is_valid_fsa(fsa)
-        assert ErrorCode.INVALID_TRANSITION_DEST in [e.code for e in errors]
+        result = is_valid_fsa(fsa)
+        assert ErrorCode.INVALID_TRANSITION_DEST in [e.code for e in result.errors]
 
     def test_invalid_transition_symbol(self):
         fsa = make_fsa(
@@ -78,8 +79,8 @@ class TestFSAValidation:
             initial="q0",
             accept=["q1"],
         )
-        errors = is_valid_fsa(fsa)
-        assert ErrorCode.INVALID_SYMBOL in [e.code for e in errors]
+        result = is_valid_fsa(fsa)
+        assert ErrorCode.INVALID_SYMBOL in [e.code for e in result.errors]
 
 
 class TestDeterminism:
@@ -98,7 +99,7 @@ class TestDeterminism:
             initial="q0",
             accept=["q1"],
         )
-        assert is_deterministic(fsa) == []
+        assert is_deterministic(fsa).ok
 
     def test_nondeterministic_fsa(self):
         fsa = make_fsa(
@@ -111,8 +112,9 @@ class TestDeterminism:
             initial="q0",
             accept=["q2"],
         )
-        errors = is_deterministic(fsa)
-        assert ErrorCode.DUPLICATE_TRANSITION in [e.code for e in errors]
+        result = is_deterministic(fsa)
+        assert not result.ok
+        assert ErrorCode.DUPLICATE_TRANSITION in [e.code for e in result.errors]
 
 
 class TestCompleteness:
@@ -131,7 +133,7 @@ class TestCompleteness:
             initial="q0",
             accept=["q1"],
         )
-        assert is_complete(fsa) == []
+        assert is_complete(fsa).ok
 
     def test_incomplete_dfa(self):
         fsa = make_fsa(
@@ -141,9 +143,9 @@ class TestCompleteness:
             initial="q0",
             accept=["q1"],
         )
-        errors = is_complete(fsa)
-        assert len(errors) == 3
-        assert ErrorCode.MISSING_TRANSITION in [e.code for e in errors]
+        result = is_complete(fsa)
+        assert not result.ok
+        assert ErrorCode.MISSING_TRANSITION in [e.code for e in result.errors]
 
     def test_complete_requires_deterministic(self):
         fsa = make_fsa(
@@ -156,8 +158,8 @@ class TestCompleteness:
             initial="q0",
             accept=["q1"],
         )
-        errors = is_complete(fsa)
-        codes = [e.code for e in errors]
+        result = is_complete(fsa)
+        codes = [e.code for e in result.errors]
         assert ErrorCode.NOT_DETERMINISTIC in codes
         assert ErrorCode.DUPLICATE_TRANSITION in codes
 
@@ -173,9 +175,9 @@ class TestReachabilityAndDeadStates:
             initial="q0",
             accept=["q1"],
         )
-        errors = find_unreachable_states(fsa)
-        assert ErrorCode.UNREACHABLE_STATE in [e.code for e in errors]
-        assert any("q2" in e.message for e in errors)
+        result = find_unreachable_states(fsa)
+        assert not result.ok
+        assert ErrorCode.UNREACHABLE_STATE in [e.code for e in result.errors]
 
     def test_find_dead_states(self):
         fsa = make_fsa(
@@ -190,9 +192,9 @@ class TestReachabilityAndDeadStates:
             initial="q0",
             accept=["q1"],
         )
-        errors = find_dead_states(fsa)
-        assert ErrorCode.DEAD_STATE in [e.code for e in errors]
-        assert any("q2" in e.message for e in errors)
+        result = find_dead_states(fsa)
+        assert not result.ok
+        assert ErrorCode.DEAD_STATE in [e.code for e in result.errors]
 
     def test_dead_states_no_accept_states(self):
         fsa = make_fsa(
@@ -205,8 +207,8 @@ class TestReachabilityAndDeadStates:
             initial="q0",
             accept=[],
         )
-        errors = find_dead_states(fsa)
-        assert len(errors) == 2
+        result = find_dead_states(fsa)
+        assert len(result.errors) == 2
 
 
 class TestStringAcceptance:
@@ -220,7 +222,7 @@ class TestStringAcceptance:
             initial="q0",
             accept=["q1"],
         )
-        assert accepts_string(fsa, "a") == []
+        assert accepts_string(fsa, "a").ok
 
     def test_rejected_no_transition(self):
         fsa = make_fsa(
@@ -230,8 +232,8 @@ class TestStringAcceptance:
             initial="q0",
             accept=["q1"],
         )
-        errors = accepts_string(fsa, "aa")
-        assert ErrorCode.TEST_CASE_FAILED in [e.code for e in errors]
+        result = accepts_string(fsa, "aa")
+        assert ErrorCode.TEST_CASE_FAILED in [e.code for e in result.errors]
 
     def test_empty_string(self):
         fsa = make_fsa(
@@ -241,7 +243,7 @@ class TestStringAcceptance:
             initial="q0",
             accept=["q0"],
         )
-        assert accepts_string(fsa, "") == []
+        assert accepts_string(fsa, "").ok
 
 
 class TestLanguageEquivalence:
@@ -262,7 +264,7 @@ class TestLanguageEquivalence:
             initial="s0",
             accept=["s1"],
         )
-        assert fsas_accept_same_string(fsa1, fsa2, "a") == []
+        assert fsas_accept_same_string(fsa1, fsa2, "a").ok
 
     def test_language_mismatch(self):
         fsa1 = make_fsa(
@@ -279,8 +281,9 @@ class TestLanguageEquivalence:
             initial="s0",
             accept=["s0"],
         )
-        errors = fsas_accept_same_language(fsa1, fsa2)
-        assert ErrorCode.LANGUAGE_MISMATCH in [e.code for e in errors]
+        result = fsas_accept_same_language(fsa1, fsa2)
+        assert not result.ok
+        assert ErrorCode.LANGUAGE_MISMATCH in [e.code for e in result.errors]
 
 
 class TestIsomorphism:

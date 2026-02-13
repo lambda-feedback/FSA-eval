@@ -133,3 +133,6 @@ dmypy.json
 
 # Test reports
 reports/
+
+# lf_toolkit install
+src/
