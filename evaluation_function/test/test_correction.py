@@ -196,5 +196,121 @@ class TestAnalyzeFsaCorrectionMinimality:
         assert result.fsa_feedback is not None
 
 
+# =============================================================================
+# Test Epsilon Transitions (End-to-End)
+# =============================================================================
+
+class TestEpsilonTransitionCorrection:
+    """Test the full correction pipeline with ε-NFA inputs."""
+
+    def test_epsilon_nfa_vs_equivalent_dfa_correct(self):
+        """ε-NFA student answer equivalent to DFA expected should be correct."""
+        # ε-NFA accepts exactly "a": q0 --ε--> q1 --a--> q2
+        student_enfa = make_fsa(
+            states=["q0", "q1", "q2"],
+            alphabet=["a"],
+            transitions=[
+                {"from_state": "q0", "to_state": "q1", "symbol": "ε"},
+                {"from_state": "q1", "to_state": "q2", "symbol": "a"},
+            ],
+            initial="q0",
+            accept=["q2"],
+        )
+        # DFA accepts exactly "a": s0 --a--> s1
+        expected_dfa = make_fsa(
+            states=["s0", "s1"],
+            alphabet=["a"],
+            transitions=[
+                {"from_state": "s0", "to_state": "s1", "symbol": "a"},
+            ],
+            initial="s0",
+            accept=["s1"],
+        )
+        result = analyze_fsa_correction(student_enfa, expected_dfa)
+        assert isinstance(result, Result)
+        assert result.is_correct is True
+
+    def test_epsilon_nfa_vs_different_dfa_incorrect(self):
+        """ε-NFA accepting 'a' vs DFA accepting 'b' should be incorrect."""
+        student_enfa = make_fsa(
+            states=["q0", "q1", "q2"],
+            alphabet=["a", "b"],
+            transitions=[
+                {"from_state": "q0", "to_state": "q1", "symbol": "ε"},
+                {"from_state": "q1", "to_state": "q2", "symbol": "a"},
+            ],
+            initial="q0",
+            accept=["q2"],
+        )
+        expected_dfa = make_fsa(
+            states=["s0", "s1"],
+            alphabet=["a", "b"],
+            transitions=[
+                {"from_state": "s0", "to_state": "s1", "symbol": "b"},
+            ],
+            initial="s0",
+            accept=["s1"],
+        )
+        result = analyze_fsa_correction(student_enfa, expected_dfa)
+        assert isinstance(result, Result)
+        assert result.is_correct is False
+        assert result.fsa_feedback is not None
+        assert len(result.fsa_feedback.errors) > 0
+
+    def test_multi_epsilon_nfa_vs_dfa_correct(self):
+        """ε-NFA for (a|b) with branching epsilons should match equivalent DFA."""
+        student_enfa = make_fsa(
+            states=["q0", "q1", "q2", "q3"],
+            alphabet=["a", "b"],
+            transitions=[
+                {"from_state": "q0", "to_state": "q1", "symbol": "ε"},
+                {"from_state": "q0", "to_state": "q2", "symbol": "ε"},
+                {"from_state": "q1", "to_state": "q3", "symbol": "a"},
+                {"from_state": "q2", "to_state": "q3", "symbol": "b"},
+            ],
+            initial="q0",
+            accept=["q3"],
+        )
+        expected_dfa = make_fsa(
+            states=["s0", "s1"],
+            alphabet=["a", "b"],
+            transitions=[
+                {"from_state": "s0", "to_state": "s1", "symbol": "a"},
+                {"from_state": "s0", "to_state": "s1", "symbol": "b"},
+            ],
+            initial="s0",
+            accept=["s1"],
+        )
+        result = analyze_fsa_correction(student_enfa, expected_dfa)
+        assert isinstance(result, Result)
+        assert result.is_correct is True
+
+    def test_epsilon_nfa_structural_info_reports_nondeterministic(self):
+        """ε-NFA should have structural info reporting non-deterministic."""
+        student_enfa = make_fsa(
+            states=["q0", "q1", "q2"],
+            alphabet=["a"],
+            transitions=[
+                {"from_state": "q0", "to_state": "q1", "symbol": "ε"},
+                {"from_state": "q1", "to_state": "q2", "symbol": "a"},
+            ],
+            initial="q0",
+            accept=["q2"],
+        )
+        expected_dfa = make_fsa(
+            states=["s0", "s1"],
+            alphabet=["a"],
+            transitions=[
+                {"from_state": "s0", "to_state": "s1", "symbol": "a"},
+            ],
+            initial="s0",
+            accept=["s1"],
+        )
+        result = analyze_fsa_correction(student_enfa, expected_dfa)
+        assert result.fsa_feedback is not None
+        assert result.fsa_feedback.structural is not None
+        assert result.fsa_feedback.structural.is_deterministic is False
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

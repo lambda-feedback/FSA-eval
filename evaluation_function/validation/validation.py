@@ -3,6 +3,8 @@ from collections import deque
 
 from evaluation_function.schemas.result import StructuralInfo
 from ..algorithms.minimization import hopcroft_minimization
+from ..algorithms.nfa_to_dfa import nfa_to_dfa, is_deterministic as is_dfa_check
+from ..algorithms.epsilon_closure import epsilon_closure_set, build_epsilon_transition_map
 
 from ..schemas import FSA, ValidationError, ErrorCode, ElementHighlight
 
@@ -102,7 +104,7 @@ def is_valid_fsa(fsa: FSA) -> List[ValidationError]:
                     suggestion=f"Add '{t.to_state}' to your states, or update this transition to go to an existing state"
                 )
             )
-        if t.symbol not in alphabet:
+        if t.symbol not in alphabet and t.symbol not in ("ε", "epsilon", ""):
             errors.append(
                 ValidationError(
                     message=f"The symbol '{t.symbol}' in this transition isn't in your alphabet. Transitions can only use symbols from the alphabet.",
@@ -134,6 +136,26 @@ def is_deterministic(fsa: FSA) -> List[ValidationError]:
     if structural_errors:
         return structural_errors
     
+    # Check for epsilon transitions (makes FSA non-deterministic)
+    for t in fsa.transitions:
+        if t.symbol in ("ε", "epsilon", ""):
+            errors.append(
+                ValidationError(
+                    message=f"Your FSA has an epsilon (ε) transition from '{t.from_state}' to '{t.to_state}'. A DFA cannot have epsilon transitions.",
+                    code=ErrorCode.NOT_DETERMINISTIC,
+                    severity="error",
+                    highlight=ElementHighlight(
+                        type="transition",
+                        from_state=t.from_state,
+                        to_state=t.to_state,
+                        symbol=t.symbol
+                    ),
+                    suggestion="Remove epsilon transitions to make this a DFA, or note that your FSA is an NFA/ε-NFA, which is also valid!"
+                )
+            )
+    if errors:
+        return errors
+
     for t in fsa.transitions:
         key = (t.from_state, t.symbol)
         if key in seen:
@@ -152,7 +174,7 @@ def is_deterministic(fsa: FSA) -> List[ValidationError]:
                 )
             )
         seen.add(key)
-    
+
     return errors
 
 
@@ -299,15 +321,19 @@ def find_dead_states(fsa: FSA) -> List[ValidationError]:
 
 def accepts_string(fsa: FSA, string: str) -> List[ValidationError]:
     """
-    Simulate the FSA on a string.
+    Simulate the FSA on a string, with full ε-transition support.
     Returns [] if accepted, else a ValidationError.
     """
     # First check if FSA is structurally valid
     structural_errors = is_valid_fsa(fsa)
     if structural_errors:
         return structural_errors
-    
-    current_states: Set[str] = {fsa.initial_state}
+
+    # Build epsilon transition map for ε-closure computation
+    epsilon_trans = build_epsilon_transition_map(fsa.transitions)
+
+    # Start with ε-closure of the initial state
+    current_states: Set[str] = epsilon_closure_set({fsa.initial_state}, epsilon_trans)
 
     for symbol in string:
         # Check if symbol is in alphabet
@@ -319,17 +345,20 @@ def accepts_string(fsa: FSA, string: str) -> List[ValidationError]:
                     severity="error"
                 )
             ]
-        
+
         next_states = set()
         for state in current_states:
             for t in fsa.transitions:
                 if t.from_state == state and t.symbol == symbol:
                     next_states.add(t.to_state)
-        current_states = next_states
+
+        # Compute ε-closure of the states reached after reading the symbol
+        current_states = epsilon_closure_set(next_states, epsilon_trans)
+
         if not current_states:
             return [
                 ValidationError(
-                    message=f"String '{string}' rejected: no transition from state(s) {current_states} on symbol '{symbol}'",
+                    message=f"String '{string}' rejected: no transition on symbol '{symbol}'",
                     code=ErrorCode.TEST_CASE_FAILED,
                     severity="error"
                 )
@@ -370,6 +399,12 @@ def fsas_accept_same_string(fsa1: FSA, fsa2: FSA, string: str) -> List[Validatio
 
 
 def fsas_accept_same_language(fsa1: FSA, fsa2: FSA) -> List[ValidationError]:
+    # Convert NFA/ε-NFA to DFA before minimization (Hopcroft requires DFA input)
+    if not is_dfa_check(fsa1):
+        fsa1 = nfa_to_dfa(fsa1)
+    if not is_dfa_check(fsa2):
+        fsa2 = nfa_to_dfa(fsa2)
+
     fsa1_min = hopcroft_minimization(fsa1)
     fsa2_min = hopcroft_minimization(fsa2)
     return are_isomorphic(fsa1_min, fsa2_min)
