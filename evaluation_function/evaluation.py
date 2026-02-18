@@ -31,10 +31,13 @@ def evaluation_function(
     """
     try:
         if not response or not answer:
-            raise ValueError(
-                f"Missing FSA data: response or answer is None\n"
-                f"response: {response}\nanswer: {answer}"
-            )
+            response = params.get("response") if isinstance(params, dict) else None
+            answer = params.get("answer") if isinstance(params, dict) else None
+            params = params.get("params") if isinstance(params, dict) else None
+            # raise ValueError(
+            #     f"Missing FSA data: response or answer is None\n"
+            #     f"response: {response}\nanswer: {answer}"
+            # )
         # Parse FSAs
         student_fsa, _ = validate_fsa(response)
         expected_fsa, expected_config = validate_fsa(answer)
