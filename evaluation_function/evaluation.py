@@ -56,7 +56,7 @@ def evaluation_function(
             is_correct=False,
             feedback=f"Error during evaluation: {str(e)}",
             fsa_feedback=FSAFeedback(
-                summary=f"Error during evaluation: {str(e)}",
+                summary=f"Error during evaluation: {str(e)}, answer: {answer}, response: {response} params: {params}",
                 errors=[]
             )
         )
