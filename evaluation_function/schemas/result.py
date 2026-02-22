@@ -212,11 +212,13 @@ class LanguageComparison(BaseModel):
         description="True if student FSA accepts the same language as expected"
     )
     
+    # not used, for extension
     counterexample: Optional[str] = Field(
         default=None,
         description="A string where student FSA differs from expected (if languages not equivalent)"
     )
     
+    # not used, for extension
     counterexample_type: Optional[Literal["should_accept", "should_reject"]] = Field(
         default=None,
         description="Whether the counterexample should be accepted or rejected"
@@ -255,6 +257,7 @@ class FSAFeedback(BaseModel):
         description="Language equivalence comparison with counterexample if applicable"
     )
     
+    # not used
     test_results: List[TestResult] = Field(
         default_factory=list,
         description="Results of individual test cases"
@@ -277,7 +280,6 @@ class Result(BaseModel):
     {
         "is_correct": false,
         "feedback": "Your FSA rejects 'ab' but it should accept it.",
-        "score": 0.75,
         "fsa_feedback": {
             "summary": "Language mismatch - incorrect behavior on some inputs",
             "errors": [
@@ -324,20 +326,7 @@ class Result(BaseModel):
         description="Human-readable feedback message for the student"
     )
     
-    score: Optional[float] = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Normalized score (0.0-1.0) for partial credit, null if not using partial credit"
-    )
-    
     fsa_feedback: Optional[FSAFeedback] = Field(
         default=None,
         description="Detailed structured feedback with element highlighting for UI"
-    )
-
-    # this is dev only
-    input_data: Optional[FSA] = Field(
-        default=None,
-        description="The parsed FSA input data (for development/debugging purposes only)"
     )

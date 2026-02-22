@@ -3,7 +3,7 @@ from lf_toolkit.evaluation import Result as LFResult
 
 from evaluation_function.schemas.params import Params
 from .schemas import FSA, FSAFrontend
-from .schemas.result import Result
+from .schemas.result import FSAFeedback, Result
 from .correction import analyze_fsa_correction
 import json
 
@@ -52,12 +52,18 @@ def evaluation_function(
         )
 
     except Exception as e:
-        # Always return LFResult with raw payload for debugging
+        result: Result = Result(
+            is_correct=False,
+            feedback=f"Error during evaluation: {str(e)}",
+            fsa_feedback=FSAFeedback(
+                summary=f"Error during evaluation: {str(e)}",
+                errors=[]
+            )
+        )
         return LFResult(
             is_correct=False,
             feedback_items=[(
                 "error",
-                f"Invalid FSA format: {str(e)}\n\n"
-                f"response: {response}\nanswer: {answer}\nparams: {params}"
+                result.fsa_feedback.model_dump_json()
             )]
         )
