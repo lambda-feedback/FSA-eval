@@ -43,12 +43,3 @@ class Params(BaseModel):
     
     # UI options
     highlight_errors: bool = Field(default=True, description="Include element IDs for UI highlighting")
-    show_counterexample: bool = Field(default=True, description="Show counterexample if languages differ")
-    
-    # Test generation
-    max_test_length: int = Field(default=10, ge=1, le=50, description="Max length for generated test strings")
-
-    is_dev: bool = Field(
-        default=False,
-        description="Flag indicating if running in development mode"
-    )
