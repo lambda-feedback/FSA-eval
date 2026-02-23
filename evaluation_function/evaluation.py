@@ -48,7 +48,7 @@ def evaluation_function(
         # Return LFResult
         return LFResult(
             is_correct=result.is_correct,
-            feedback_items=[("result", result.feedback), ("errors", result.fsa_feedback.model_dump_json())]
+            feedback_items=[("errors", result.fsa_feedback.model_dump_json())]
         )
 
     except Exception as e:
